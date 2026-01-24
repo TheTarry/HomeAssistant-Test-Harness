@@ -37,6 +37,79 @@ If not set, the harness will use the current working directory for both.
 - **Automatic cleanup**: Containers are stopped and removed after all tests complete
 - **Parallel-safe**: Dynamic port allocation allows multiple test runs concurrently
 
+## Test Environment Architecture
+
+Integration tests use a Docker Compose environment to run isolated instances of Home Assistant and AppDaemon.
+
+### Container Architecture
+
+```plaintext
+┌─────────────────────────────────────────────────────────────┐
+│  Test Suite (pytest)                                        │
+│  ├── Uses harness package (DockerComposeManager,            │
+│  │   HomeAssistant, AppDaemon, TimeMachine)                 │
+│  └── Interacts via HTTP APIs                                │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Docker Compose Environment                                 │
+│  ┌────────────────────────┐   ┌──────────────────────────┐  │
+│  │  Home Assistant        │   │  AppDaemon               │  │
+│  │  Port: 8123 (ephemeral)│   │  Port: 5050 (ephemeral)  │  │
+│  │  ├── Configuration     │   │  ├── Apps                │  │
+│  │  │   (from repo)       │   │  │   (from repo)         │  │
+│  │  ├── Automations       │   │  ├── Connected to HA     │  │
+│  │  ├── Scripts           │   │  └── API enabled         │  │
+│  │  └── Templates         │   │                          │  │
+│  └────────────────────────┘   └──────────────────────────┘  │
+│             │                              │                │
+│             └──────────┬───────────────────┘                │
+│                        ▼                                    │
+│              ┌──────────────────┐                           │
+│              │  Shared Volume   │                           │
+│              │  - Auth token    │                           │
+│              │  - Ready flags   │                           │
+│              └──────────────────┘                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Startup Sequence
+
+The `docker-compose.yaml` orchestrates container startup with dependencies and health checks:
+
+1. **Home Assistant starts** (`containers/homeassistant/entrypoint.sh`):
+  - Copies repository configuration into `/config`
+  - Starts Home Assistant server
+  - Completes onboarding (creates test user)
+  - Generates long-lived access token and refresh token
+  - Writes tokens to shared volume (`/shared_data/.ha_token` & `/shared_data/.ha_refresh_token`)
+  - Creates ready flag (`/shared_data/.homeassistant_ready`)
+
+2. **AppDaemon starts** (after HA is healthy) (`containers/appdaemon/entrypoint.sh`):
+  - Waits for HA token file
+  - Reads HA long-lived access token from shared volume
+  - Generates `appdaemon.yaml` from template with token
+  - Starts AppDaemon server
+  - Waits for initialization to complete
+  - Creates ready flag (`/shared_data/.appdaemon_ready`)
+
+3. **Docker Compose health checks**:
+  - Home Assistant: checks for `.homeassistant_ready` flag
+  - AppDaemon: checks for `.appdaemon_ready` flag
+  - `docker compose up --wait` blocks until both are healthy
+
+### Parallel Test Execution
+
+The environment supports **parallel test runs** via Docker Compose project names:
+
+- Each test session gets a unique project ID (`uuid.uuid4().hex`)
+- Containers are named `<project_id>-<service>-1` (e.g., `a1b2c3d4-homeassistant-1`)
+- Ports are dynamically assigned (ephemeral mapping)
+- Volumes are project-scoped (isolated state per run)
+
+This design allows multiple developers or CI jobs to run tests simultaneously without conflicts.
+
 ## Writing Tests
 
 ### Basic Test

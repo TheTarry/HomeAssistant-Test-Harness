@@ -149,6 +149,93 @@ Advances time by specified number of seconds from current frozen time.
 
 Returns to real system time. Called automatically in fixture teardown.
 
+### Limitations and Considerations
+
+#### Time Can Only Move Forward
+
+The `advance_time()` method only accepts non-negative values. To go back in time, use `set_time()` to jump to a specific earlier moment:
+
+```python
+# ✅ Supported - advance forward
+time_machine.advance_time(60)  # Advance 60 seconds
+
+# ❌ Not allowed - negative values
+time_machine.advance_time(-60)  # Raises ValueError
+
+# ✅ To go back, use set_time() instead
+time_machine.set_time(datetime(2026, 1, 5, 10, 0))  # Jump to 10:00 AM
+time_machine.advance_time(3600)  # Advance to 11:00 AM
+time_machine.set_time(datetime(2026, 1, 5, 9, 0))   # Jump back to 9:00 AM
+```
+
+#### Second-Level Granularity
+
+Time manipulation works at second-level precision. Sub-second accuracy is not supported:
+
+```python
+# ✅ Supported
+time_machine.advance_time(60)  # 60 seconds
+
+# ❌ Not meaningful (will advance 3 seconds, not 3.5)
+time_machine.advance_time(3.5)  # Don't rely on fractional seconds
+```
+
+#### Timezone is Fixed
+
+All tests use `Europe/London` timezone. You cannot change the timezone during a test.
+
+#### Shared Clock Across Containers
+
+Both Home Assistant and AppDaemon share the same fake clock. You cannot set different times for
+each container.
+
+#### State vs Time Persistence
+
+The `docker`, `home_assistant`, and `app_daemon` fixtures are
+session-scoped, so entity states persist across tests. The `time_machine` fixture is
+function-scoped and automatically resets time after each test that uses it, but
+entity states remain.
+
+**Best practice:** Always set initial time at the start of tests that use time
+manipulation, and reset relevant entity states if needed.
+
+#### Real-Time Services May Behave Differently
+
+Some Home Assistant integrations rely on real-time APIs (e.g., weather services, sun position
+calculations). These may not respond correctly to fake time. Test external integrations with mock
+data or acceptance tests.
+
+### Example: Comprehensive Time-Based Test
+
+```python
+from datetime import datetime
+from ha_integration_test_harness import HomeAssistant, TimeMachine
+
+def test_heating_schedule(home_assistant: HomeAssistant, time_machine: TimeMachine):
+    """Test that heating turns on at scheduled time and turns off after delay."""
+
+    # Set time to Monday morning before heating schedule
+    time_machine.set_time(datetime(2026, 1, 5, 6, 0))  # 6:00 AM
+
+    # Verify heating is off
+    state = home_assistant.get_state("climate.thermostat")
+    assert state["attributes"]["hvac_action"] == "off"
+
+    # Advance to heating schedule start (7:00 AM)
+    time_machine.advance_time(3600)  # +1 hour
+
+    # Verify heating turned on
+    home_assistant.assert_entity_state("climate.thermostat", "heat", timeout=10)
+
+    # Simulate someone leaving home
+    home_assistant.set_state("person.homeowner", "not_home")
+
+    # Verify heating turned off (automation should detect absence)
+    home_assistant.assert_entity_state("climate.thermostat", "off", timeout=5)
+
+    # Time is automatically reset to real time after this test completes
+```
+
 ## Fixture Scopes
 
 ### Session Scope
