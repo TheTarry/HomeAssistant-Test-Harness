@@ -9,29 +9,11 @@
 
 ## Installation
 
-### From PyPI (when published)
-
-```bash
-pip install ha_integration_test_harness
-```
-
 ### From GitHub
 
 ```bash
 pip install git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git
 ```
-
-### For Development
-
-Clone the repository and run the setup script:
-
-```bash
-git clone https://github.com/MarkTarry/HomeAssistant-Test-Harness.git
-cd HomeAssistant-Test-Harness
-./setup_dev_env.sh
-```
-
-This installs dependencies, sets up pre-commit hooks, and runs validation. See the [Development Guide](development.md) for more details.
 
 ## Verification
 
