@@ -86,21 +86,30 @@ class DockerComposeManager:
         The environment is not started automatically; call start() to launch it.
 
         Raises:
-            DockerError: If configuration.yaml is not found in the detected repository root.
+            DockerError: If configuration.yaml is not found in the detected Home Assistant root directory.
         """
         self._run_id = uuid.uuid4().hex
 
-        # Detect repository root using git, with fallback to current working directory
-        self._repo_root = self._detect_repo_root()
+        # Detect Home Assistant configuration root
+        self._ha_config_root = self._detect_ha_config_root()
 
-        # Validate that configuration.yaml exists in the repository root
-        config_file = self._repo_root / "configuration.yaml"
+        # Validate that configuration.yaml exists in the Home Assistant root
+        config_file = self._ha_config_root / "configuration.yaml"
         if not config_file.exists():
             raise DockerError(
                 f"configuration.yaml not found at {config_file}. "
-                "Tests must be run from a Home Assistant configuration repository. "
+                "Tests must be run from a Home Assistant configuration directory. "
+                "Set HOME_ASSISTANT_CONFIG_ROOT environment variable to specify the location. "
                 "See: https://github.com/MarkTarry/HomeAssistant-Test-Harness#usage"
             )
+
+        # Detect AppDaemon configuration root
+        self._appdaemon_config_root = self._detect_appdaemon_config_root()
+
+        # Validate that apps.yaml exists in the AppDaemon root (warning only)
+        apps_yaml = self._appdaemon_config_root / "apps" / "apps.yaml"
+        if not apps_yaml.exists():
+            logger.warning(f"apps/apps.yaml not found at {apps_yaml}. " "AppDaemon may not function correctly. " "Set APPDAEMON_CONFIG_ROOT environment variable to specify the location.")
 
         # Set up containers directory path
         self._containers_dir = Path(__file__).parent / "containers"
@@ -115,30 +124,43 @@ class DockerComposeManager:
         # Container lifecycle state
         self._containers: dict[str, DockerContainer] = {}
 
-    def _detect_repo_root(self) -> Path:
-        """Detect the repository root directory.
+    def _detect_ha_config_root(self) -> Path:
+        """Detect the Home Assistant configuration root directory.
 
-        Attempts to use git to find the repository root. If git is not available
-        or not in a git repository, falls back to the current working directory.
+        Checks the HOME_ASSISTANT_CONFIG_ROOT environment variable first.
+        If not set, falls back to the current working directory.
 
         Returns:
-            Path: The detected repository root directory.
+            Path: The detected Home Assistant configuration root directory.
         """
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--show-toplevel"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            repo_root = Path(result.stdout.strip())
-            logger.debug(f"Detected git repository root: {repo_root}")
-            return repo_root
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            # Git not available or not in a git repo, fall back to current directory
-            repo_root = Path(os.getcwd())
-            logger.debug(f"Git not available, using current directory as root: {repo_root}")
-            return repo_root
+        env_var = os.environ.get("HOME_ASSISTANT_CONFIG_ROOT")
+        if env_var:
+            ha_root = Path(env_var)
+            logger.debug(f"Using Home Assistant root from HOME_ASSISTANT_CONFIG_ROOT: {ha_root}")
+            return ha_root
+
+        ha_root = Path(os.getcwd())
+        logger.debug(f"HOME_ASSISTANT_CONFIG_ROOT not set, using current directory as Home Assistant root: {ha_root}")
+        return ha_root
+
+    def _detect_appdaemon_config_root(self) -> Path:
+        """Detect the AppDaemon configuration root directory.
+
+        Checks the APPDAEMON_CONFIG_ROOT environment variable first.
+        If not set, falls back to the current working directory.
+
+        Returns:
+            Path: The detected AppDaemon configuration root directory.
+        """
+        env_var = os.environ.get("APPDAEMON_CONFIG_ROOT")
+        if env_var:
+            appdaemon_root = Path(env_var)
+            logger.debug(f"Using AppDaemon root from APPDAEMON_CONFIG_ROOT: {appdaemon_root}")
+            return appdaemon_root
+
+        appdaemon_root = Path(os.getcwd())
+        logger.debug(f"APPDAEMON_CONFIG_ROOT not set, using current directory as AppDaemon root: {appdaemon_root}")
+        return appdaemon_root
 
     def start(self) -> None:
         """Start the Docker Compose test environment.
@@ -156,9 +178,10 @@ class DockerComposeManager:
         """
         logger.debug("Starting docker-compose test environment...")
         try:
-            # Set REPO_ROOT environment variable for docker-compose to mount the repository
+            # Set environment variables for docker-compose to mount the configuration directories
             env = os.environ.copy()
-            env["REPO_ROOT"] = str(self._repo_root)
+            env["HA_CONFIG_ROOT"] = str(self._ha_config_root)
+            env["APPDAEMON_CONFIG_ROOT"] = str(self._appdaemon_config_root)
 
             subprocess.run(
                 ["docker", "compose", "-p", self._run_id, "up", "-d", "--wait"],

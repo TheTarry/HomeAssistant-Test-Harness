@@ -14,12 +14,22 @@ See [Installation Guide](installation.md) for details.
 
 When you run tests, the harness:
 
-1. **Detects repository root**: Uses `git rev-parse --show-toplevel` to find your repository root
-2. **Falls back gracefully**: If git is not available, uses current working directory
-3. **Validates configuration**: Checks that `configuration.yaml` exists at the root
-4. **Mounts repository**: Mounts the entire repository as `/config` in the Home Assistant container
+1. **Checks environment variables**: Looks for `HOME_ASSISTANT_CONFIG_ROOT` (Home Assistant) and `APPDAEMON_CONFIG_ROOT` (AppDaemon)
+2. **Falls back to current directory**: If environment variables are not set, uses current working directory
+3. **Validates configuration**:
+   - Checks that `configuration.yaml` exists in the Home Assistant root (raises error if missing)
+   - Checks that `apps/apps.yaml` exists in the AppDaemon root (logs warning if missing)
+4. **Mounts directories**: Mounts the directories as `/config` in the Home Assistant container and `/conf/apps` in the AppDaemon container
 
-**Note:** The harness works best when run from within a git repository, but will function without git.
+**Note:** You can run tests from any directory by setting the environment variables:
+
+```bash
+export HOME_ASSISTANT_CONFIG_ROOT=/path/to/homeassistant/config
+export APPDAEMON_CONFIG_ROOT=/path/to/appdaemon/config
+pytest
+```
+
+If not set, the harness will use the current working directory for both.
 
 ### Container Lifecycle
 

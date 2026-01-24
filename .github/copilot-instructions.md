@@ -61,11 +61,13 @@ This is a **Python package** that:
 
 The `DockerComposeManager` in [docker_manager.py](src/ha_integration_test_harness/docker_manager.py):
 
-1. Detects git repository root via `git rev-parse --show-toplevel`
-2. Falls back to `os.getcwd()` if git unavailable (silent, no warning)
-3. Validates `configuration.yaml` exists at root
-4. Sets `REPO_ROOT` environment variable
-5. docker-compose.yaml mounts `${REPO_ROOT}:/config` into HA container
+1. Checks `HOME_ASSISTANT_CONFIG_ROOT` environment variable for Home Assistant config directory
+2. Checks `APPDAEMON_CONFIG_ROOT` environment variable for AppDaemon config directory
+3. Falls back to `os.getcwd()` if environment variables not set
+4. Validates `configuration.yaml` exists in Home Assistant root (raises error if missing)
+5. Validates `apps/apps.yaml` exists in AppDaemon root (logs warning if missing, continues)
+6. Sets `HA_CONFIG_ROOT` and `APPDAEMON_CONFIG_ROOT` environment variables for docker-compose
+7. docker-compose.yaml mounts `${HA_CONFIG_ROOT}:/config` and `${APPDAEMON_CONFIG_ROOT}/apps:/conf/apps`
 
 ### Pytest Plugin Registration
 
@@ -194,18 +196,18 @@ Follow semantic versioning:
 
 ## Important Notes
 
-1. **Never log warnings** for missing git command - silent fallback only
-2. **Package name consistency**: `ha_integration_test_harness` (underscore, not hyphen)
-3. **Read-write mounts**: Repository mounted as read-write (not :ro) for HA storage writes
-4. **Error messages**: Include link to GitHub usage docs for configuration errors
-5. **Documentation structure**: Keep docs in separate files, link from README
+1. **Package name consistency**: `ha_integration_test_harness` (underscore, not hyphen)
+2. **Read-write mounts**: Configuration directories mounted as read-write (not :ro) for HA storage writes
+3. **Error messages**: Include link to GitHub usage docs for configuration errors
+4. **Documentation structure**: Keep docs in separate files, link from README
+5. **Environment variables**: Support `HOME_ASSISTANT_CONFIG_ROOT` and `APPDAEMON_CONFIG_ROOT` for flexible config paths
 
 ## Best Practices
 
 - **Minimal dependencies**: Only `requests` for runtime
 - **Clear error messages**: Help users debug issues
 - **Atomic operations**: File writes use temp file + move pattern
-- **Graceful fallbacks**: Handle missing git gracefully
+- **Environment-based configuration**: Use env vars for flexible directory paths
 - **Type safety**: Use type hints throughout
 
 ## Resources

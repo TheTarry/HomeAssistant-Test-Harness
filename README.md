@@ -6,7 +6,7 @@ A pytest plugin for integration testing Home Assistant and AppDaemon configurati
 
 - **Docker-based test environment**: Fully isolated Home Assistant and AppDaemon instances
 - **Pytest fixtures**: Session-scoped containers with automatic cleanup
-- **Auto-discovery**: Automatically mounts your repository configuration
+- **Flexible configuration**: Uses environment variables or current directory
 - **API clients**: Python clients for Home Assistant and AppDaemon APIs
 - **Time manipulation**: Freeze and advance time for deterministic testing
 - **Parallel test support**: Dynamic port allocation for concurrent test runs
@@ -24,7 +24,7 @@ pip install ha_integration_test_harness
 - Python 3.12+
 - Docker Engine
 - Docker Compose V2
-- Home Assistant configuration repository (works best with git)
+- Home Assistant configuration directory with `configuration.yaml`
 
 ### Write a Test
 
@@ -33,10 +33,10 @@ def test_automation(home_assistant):
     """Test that an automation works correctly."""
     # Set entity state
     home_assistant.set_state("input_boolean.test_mode", "on")
-    
+
     # Trigger automation
     home_assistant.set_state("binary_sensor.motion", "on")
-    
+
     # Assert expected outcome (polls with timeout)
     home_assistant.assert_entity_state("light.living_room", "on", timeout=10)
 ```
@@ -49,11 +49,13 @@ pytest
 
 The plugin automatically:
 
-1. Detects your repository root (via git or current directory)
-2. Validates `configuration.yaml` exists
-3. Mounts your entire repository as `/config` in Home Assistant container
-4. Starts Home Assistant and AppDaemon in Docker
-5. Provides fixtures for testing
+1. Detects your Home Assistant configuration directory (via `HOME_ASSISTANT_CONFIG_ROOT` env var or current directory)
+2. Detects your AppDaemon configuration directory (via `APPDAEMON_CONFIG_ROOT` env var or current directory)
+3. Validates `configuration.yaml` exists in Home Assistant directory
+4. Validates `apps/apps.yaml` exists in AppDaemon directory (warning only)
+5. Mounts configuration directories into Docker containers
+6. Starts Home Assistant and AppDaemon
+7. Provides fixtures for testing
 
 ## Documentation
 

@@ -7,18 +7,24 @@
 **Error:**
 
 ```text
-DockerError: configuration.yaml not found at /path/to/repo/configuration.yaml.
-Tests must be run from a Home Assistant configuration repository.
+DockerError: configuration.yaml not found at /path/to/config/configuration.yaml.
+Tests must be run from a Home Assistant configuration directory.
+Set HOME_ASSISTANT_CONFIG_ROOT environment variable to specify the location.
 See: https://github.com/MarkTarry/HomeAssistant-Test-Harness#usage
 ```
 
-**Cause:** Tests are not running from a Home Assistant configuration repository, or `configuration.yaml` is not at the repository root.
+**Cause:** Tests cannot find your Home Assistant `configuration.yaml` file.
 
 **Solution:**
 
-1. Ensure you're running tests from the repository root directory
-2. Verify `configuration.yaml` exists at the root
-3. Check that git repository detection is working (`git rev-parse --show-toplevel`)
+1. Ensure you're running tests from your Home Assistant configuration directory, or
+2. Set the environment variable to point to your configuration:
+
+   ```bash
+   export HOME_ASSISTANT_CONFIG_ROOT=/path/to/homeassistant/config
+   ```
+
+3. Verify `configuration.yaml` exists at the root of that directory
 
 ### Docker Not Available
 
@@ -142,7 +148,8 @@ Containers are automatically stopped after tests, but logs are captured. Check t
 Navigate to the containers directory and run manually:
 
 ```bash
-export REPO_ROOT=/path/to/your/ha/repo
+export HA_CONFIG_ROOT=/path/to/homeassistant/config
+export APPDAEMON_CONFIG_ROOT=/path/to/appdaemon/config
 cd src/ha_integration_test_harness/containers
 docker compose up
 ```
