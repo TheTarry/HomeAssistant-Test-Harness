@@ -1,0 +1,12 @@
+# Minimal Home Assistant configuration for example tests
+
+default_config:
+
+# Enable REST API
+api:
+
+# Enable frontend
+frontend:
+
+# Enable system health
+system_health:

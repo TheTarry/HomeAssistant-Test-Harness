@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ha_integration_test_harness"
+version = "0.1.0"
+description = "Pytest plugin for integration testing Home Assistant and AppDaemon configurations"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Mark Tarry", email = "mark@tarry.io"}
+]
+keywords = ["homeassistant", "appdaemon", "testing", "pytest", "integration-tests"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+]
+
+dependencies = [
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pre-commit>=3.0.0",
+    "mypy>=1.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "types-requests>=2.31.0",
+    "build>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/MarkTarry/HomeAssistant-Test-Harness"
+Repository = "https://github.com/MarkTarry/HomeAssistant-Test-Harness"
+Issues = "https://github.com/MarkTarry/HomeAssistant-Test-Harness/issues"
+Documentation = "https://github.com/MarkTarry/HomeAssistant-Test-Harness#readme"
+
+# Register pytest plugin - this makes fixtures auto-discoverable
+[project.entry-points.pytest11]
+ha_integration_test_harness = "ha_integration_test_harness.conftest"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Include all files in containers/ directory as package data
+[tool.setuptools.package-data]
+ha_integration_test_harness = [
+    "containers/**/*",
+    "containers/**/.*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["examples"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.black]
+line-length = 200
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 200
+
+[tool.flake8]
+max-line-length = 200
+exclude = [".venv", "__pycache__", ".pytest_cache", ".mypy_cache", "*.egg-info", "build", "dist"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+strict = true
+explicit_package_bases = true

@@ -1,0 +1,54 @@
+---
+services:
+  homeassistant:
+    image: homeassistant/home-assistant:stable
+    # No fixed container name - allows parallel instances
+    ports:
+      - "8123"  # Ephemeral port mapping - Docker assigns random host port
+    volumes:
+      - ./homeassistant/generate_long_lived_token.sh:/generate_long_lived_token.sh:ro
+      - ./homeassistant/entrypoint.sh:/entrypoint.sh:ro
+      # Mount libfaketime installation script for time manipulation in tests
+      - ./libfaketime:/libfaketime:ro
+      # Mount entire Home Assistant configuration repository as /config
+      # REPO_ROOT is set by DockerComposeManager to the detected git root
+      - ${REPO_ROOT}:/config
+      # Shared data volume (project-scoped for parallel test runs)
+      - shared_data:/shared_data:rw
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    healthcheck:
+      start_period: 5s
+      test: ["CMD", "test", "-f", "/shared_data/.homeassistant_ready"]
+      timeout: 2s
+      retries: 30
+      interval: 3s
+
+  appdaemon:
+    image: acockburn/appdaemon:latest
+    # No fixed container name - allows parallel instances
+    ports:
+      - "5050"  # Ephemeral port mapping - Docker assigns random host port
+    volumes:
+      - ./appdaemon/entrypoint.sh:/entrypoint.sh:ro
+      # Mount libfaketime installation script for time manipulation in tests
+      - ./libfaketime:/libfaketime:ro
+      # Mount files referenced by entrypoint script
+      - ./appdaemon/appdaemon.yaml.template:/conf/appdaemon.yaml.template:ro
+      # Mount AppDaemon apps from the repository
+      - ${REPO_ROOT}/appdaemon/apps:/conf/apps:ro
+      # Shared data volume (project-scoped for parallel test runs)
+      - shared_data:/shared_data:rw
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    depends_on:
+      homeassistant:
+        condition: service_healthy
+    healthcheck:
+      start_period: 5s
+      test: ["CMD", "test", "-f", "/shared_data/.appdaemon_ready"]
+      timeout: 2s
+      retries: 30
+      interval: 3s
+
+volumes:
+  # Project-scoped volume - each parallel test run gets its own isolated shared_data
+  shared_data:
