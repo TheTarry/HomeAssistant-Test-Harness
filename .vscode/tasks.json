@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+      {
+          "label": "Run All Checks",
+          "type": "shell",
+          "command": "./run_checks.sh",
+          "options": {
+              "cwd": "${workspaceFolder}"
+          },
+          "problemMatcher": [],
+          "presentation": {
+              "reveal": "always",
+              "panel": "new"
+          },
+          "group": {
+              "kind": "build",
+              "isDefault": true
+          }
+      }
+  ]
+}
