@@ -8,7 +8,6 @@ version = "0.1.0"
 description = "Pytest plugin for integration testing Home Assistant and AppDaemon configurations"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
 authors = [
     {name = "Mark Tarry", email = "mark@tarry.io"}
 ]
@@ -17,7 +16,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: Pytest",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Testing",
