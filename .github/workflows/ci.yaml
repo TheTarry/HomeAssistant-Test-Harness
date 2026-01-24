@@ -17,16 +17,10 @@ jobs:
       - name: 🐍 Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: 3.12
       - name: 🛠️ Install uv
         uses: astral-sh/setup-uv@v7
       - name: 🛠️ Install dependencies
         run: uv sync --all-extras --frozen
-      - name: ✅ Run pre-commit hooks
-        run: uv run pre-commit run --all-files
-      - name: 📦 Build package
-        run: uv run python -m build
-      - name: ✅ Validate package imports
-        run: |
-          uv pip install dist/*.whl
-          python -c "import ha_integration_test_harness; print(f'Successfully imported version {ha_integration_test_harness.__version__}')"
+      - name: ✅ Run Checks
+        run: ./run_checks.sh
