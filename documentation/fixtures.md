@@ -6,7 +6,7 @@ The harness provides four pytest fixtures that are automatically available when 
 
 Manages Docker container lifecycle for the entire test session.
 
-### API
+### docker API
 
 ```python
 docker.get_home_assistant_url() -> str
@@ -17,7 +17,7 @@ docker.get_container_diagnostics() -> str
 docker.containers_healthy() -> bool
 ```
 
-### Usage
+### docker Usage
 
 Most tests won't interact with `docker` directly. The `home_assistant` and `app_daemon` fixtures provide higher-level APIs.
 
@@ -31,7 +31,7 @@ def test_with_docker(docker):
 
 Home Assistant API client with automatic authentication and retry logic.
 
-### API
+### home_assistant API
 
 ```python
 home_assistant.set_state(entity_id: str, state: str, attributes: dict = None) -> None
@@ -41,25 +41,25 @@ home_assistant.remove_entity(entity_id: str) -> None
 home_assistant.regenerate_access_token() -> None
 ```
 
-### Usage
+### home_assistant Usage
 
 ```python
 def test_home_assistant(home_assistant):
     # Set entity state
     home_assistant.set_state("switch.test", "on")
-    
+
     # Get entity state
     state = home_assistant.get_state("switch.test")
     assert state["state"] == "on"
-    
+
     # Poll until condition is met (with timeout)
     home_assistant.assert_entity_state("timer.test", "idle", timeout=30)
-    
+
     # Clean up
     home_assistant.remove_entity("switch.test")
 ```
 
-### Methods
+### home_assistant Methods
 
 #### `set_state(entity_id, state, attributes=None)`
 
@@ -91,7 +91,7 @@ Generates a new access token. Called automatically after time manipulation.
 
 AppDaemon API client.
 
-### API
+### app_daemon API
 
 Currently provides basic initialization. Future versions will add methods for interacting with AppDaemon apps.
 
@@ -105,7 +105,7 @@ def test_appdaemon(app_daemon):
 
 Manages time manipulation for deterministic testing of time-based automations.
 
-### API
+### time_machine API
 
 ```python
 time_machine.set_time(dt: datetime) -> None
@@ -113,7 +113,7 @@ time_machine.advance_time(seconds: int) -> None
 time_machine.reset_time() -> None
 ```
 
-### Usage
+### time_machine Usage
 
 ```python
 from datetime import datetime
@@ -121,17 +121,17 @@ from datetime import datetime
 def test_time_manipulation(home_assistant, time_machine):
     # Freeze time at specific moment
     time_machine.set_time(datetime(2026, 1, 21, 10, 30))
-    
+
     # Advance time by 60 seconds
     time_machine.advance_time(60)
-    
+
     # Verify time-based automation triggered
     home_assistant.assert_entity_state("light.scheduled", "on")
-    
+
     # Time automatically resets after test
 ```
 
-### Methods
+### time_machine Methods
 
 #### `set_time(dt)`
 

@@ -6,7 +6,7 @@
 
 **Error:**
 
-```
+```text
 DockerError: configuration.yaml not found at /path/to/repo/configuration.yaml.
 Tests must be run from a Home Assistant configuration repository.
 See: https://github.com/MarkTarry/HomeAssistant-Test-Harness#usage
@@ -24,7 +24,7 @@ See: https://github.com/MarkTarry/HomeAssistant-Test-Harness#usage
 
 **Error:**
 
-```
+```text
 DockerError: 'docker' command not found. Ensure Docker is installed and available in PATH.
 ```
 
@@ -41,7 +41,7 @@ DockerError: 'docker' command not found. Ensure Docker is installed and availabl
 
 **Error:**
 
-```
+```text
 Failed to start docker-compose environment (project: abc123)
 ```
 
@@ -72,7 +72,7 @@ The harness uses ephemeral ports by default, so this should be rare. If you enco
 
 **Error:**
 
-```
+```text
 fixture 'home_assistant' not found
 ```
 
@@ -118,7 +118,7 @@ fixture 'home_assistant' not found
 
 **Error:**
 
-```
+```text
 Permission denied while trying to connect to the Docker daemon socket
 ```
 
@@ -172,7 +172,7 @@ If you encounter issues not covered here:
 
 1. Check [GitHub Issues](https://github.com/MarkTarry/HomeAssistant-Test-Harness/issues)
 2. Open a new issue with:
-   - Full error message
-   - Test code that reproduces the issue
-   - Container diagnostics from test output
-   - Docker and Python versions
+  - Full error message
+  - Test code that reproduces the issue
+  - Container diagnostics from test output
+  - Docker and Python versions

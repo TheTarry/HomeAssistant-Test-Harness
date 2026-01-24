@@ -21,10 +21,10 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> 
     if call.when == "call" and call.excinfo is not None:
         # Test failed - mark in session stash
         if not hasattr(item.session, "_test_failure_detected"):
-            item.session._test_failure_detected = True  # type: ignore[attr-defined]
+            item.session._test_failure_detected = True
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
 def docker(request: pytest.FixtureRequest) -> Generator[DockerComposeManager, None, None]:
     """Provide Docker Compose manager for integration tests.
 
@@ -61,7 +61,7 @@ def docker(request: pytest.FixtureRequest) -> Generator[DockerComposeManager, No
         manager.stop()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
 def home_assistant(docker: DockerComposeManager) -> HomeAssistant:
     """Provide Home Assistant API client for integration tests.
 
@@ -80,7 +80,7 @@ def home_assistant(docker: DockerComposeManager) -> HomeAssistant:
     return HomeAssistant(base_url, refresh_token)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
 def app_daemon(docker: DockerComposeManager) -> AppDaemon:
     """Provide AppDaemon API client for integration tests.
 
@@ -98,7 +98,7 @@ def app_daemon(docker: DockerComposeManager) -> AppDaemon:
     return AppDaemon(base_url)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function")  # type: ignore[untyped-decorator]
 def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) -> Generator[TimeMachine, None, None]:
     """Provide time machine for integration tests.
 
