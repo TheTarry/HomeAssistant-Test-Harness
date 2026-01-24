@@ -1,0 +1,21 @@
+# Line ending configuration for cross-platform compatibility
+# Ensures shell scripts always use Unix line endings (LF) even on Windows
+
+# Shell scripts MUST have LF endings for Docker container execution
+*.sh text eol=lf
+
+# Python source files use native line endings
+*.py text
+
+# Configuration files
+*.yaml text
+*.yml text
+*.toml text
+*.json text
+
+# Documentation
+*.md text
+
+# Git configuration files
+.gitignore text
+.gitattributes text

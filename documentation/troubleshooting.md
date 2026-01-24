@@ -74,6 +74,46 @@ The harness uses ephemeral ports by default, so this should be rare. If you enco
 2. Check what's using the port: `netstat -an | grep 8123`
 3. The harness should automatically use different ports for parallel runs
 
+### Shell Script Line Ending Errors (Windows)
+
+**Error:**
+
+```text
+/entrypoint.sh: line 2: set: -: invalid option
+/entrypoint.sh: line 3: $'\r': command not found
+/bin/bash: /entrypoint.sh: /bin/bash^M: bad interpreter: No such file or directory
+```
+
+**Cause:** Shell scripts have Windows line endings (CRLF) instead of Unix line endings (LF). This happens when the package is installed from git on Windows systems prior to v0.1.1.
+
+**Solution:**
+
+1. **Upgrade to v0.1.1 or later:** The package now includes `.gitattributes` that enforces Unix line endings for shell scripts:
+
+   ```toml
+   # In your pyproject.toml
+   [project.optional-dependencies]
+   dev = [
+       "ha-integration-test-harness @ git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git@v0.1.1"
+   ]
+   ```
+
+2. **For versions prior to v0.1.1:** If you must use an older version, you can manually fix line endings after installation (not recommended):
+
+   ```bash
+   # Find the installed package location
+   python -c "import ha_integration_test_harness; print(ha_integration_test_harness.__file__)"
+   # Navigate to that directory and convert scripts
+   find . -name "*.sh" -exec dos2unix {} \;
+   ```
+
+3. **For development:** If you've cloned the repository on Windows, the `.gitattributes` file (added in v0.1.1) will automatically normalize line endings. Re-clone the repository or run:
+
+   ```bash
+   git rm --cached -r .
+   git reset --hard
+   ```
+
 ### Fixtures Not Found
 
 **Error:**
