@@ -131,11 +131,11 @@ Follow [semantic versioning](https://semver.org/):
 
 ### Process
 
-1. **Update version** in `pyproject.toml` and `__init__.py`
+1. **Update version** in `pyproject.toml`
 2. **Commit changes**:
 
    ```bash
-   git add pyproject.toml src/ha_integration_test_harness/__init__.py
+   git add pyproject.toml
    git commit -m "Bump version to 0.2.0"
    git push
    ```
