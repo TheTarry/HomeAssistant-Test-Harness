@@ -4,6 +4,7 @@ set -e
 echo "⏳ Initializing Home Assistant..."
 
 # Install and configure libfaketime for time manipulation in tests
+# shellcheck source=/dev/null
 source /libfaketime/install_libfaketime.sh
 
 # Ensure essential config files, which are not version controlled, exist

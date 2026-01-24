@@ -89,7 +89,7 @@ export LD_PRELOAD="${INSTALL_DIR}/libfaketime.so.1"
 # Initialize the timestamp file with +0 (use real time with no offset).
 # The test harness will update this file whenever it manipulates the simulated time.
 mkdir -p /shared_data
-echo -n "+0" > /shared_data/.faketime.tmp
+printf "+0" > /shared_data/.faketime.tmp
 mv /shared_data/.faketime.tmp /shared_data/.faketime
 
 echo "✅ libfaketime configured (time control via ${FAKETIME_TIMESTAMP_FILE})"

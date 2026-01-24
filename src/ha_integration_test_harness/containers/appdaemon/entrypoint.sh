@@ -4,6 +4,7 @@ set -e
 echo "⏳ Initializing AppDaemon..."
 
 # Install and configure libfaketime for time manipulation in tests
+# shellcheck source=/dev/null
 . /libfaketime/install_libfaketime.sh
 
 echo "⏳ Waiting for Home Assistant token..."
@@ -47,15 +48,13 @@ APPDAEMON_PID=$!
 
 # Wait for AppDaemon to fully initialize
 echo "⏳ Waiting for AppDaemon to initialize..."
-timeout 60 sh -c '
+if timeout 60 sh -c '
   while ! grep -q "AppDaemon: All plugins ready" /tmp/appdaemon.log && \
         ! grep -q "HASS: Completed initialization" /tmp/appdaemon.log && \
         ! grep -q "AppDaemon: Calling initialize()" /tmp/appdaemon.log; do
     sleep 1
   done
-'
-
-if [ $? -eq 0 ]; then
+'; then
   echo "✅ AppDaemon fully initialized"
   touch /shared_data/.appdaemon_ready
 else

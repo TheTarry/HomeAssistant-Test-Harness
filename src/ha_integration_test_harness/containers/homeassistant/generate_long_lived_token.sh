@@ -17,6 +17,7 @@ echo "🔑 Generating long-lived access token via websocket..."
 # Use Python with the third-party `websockets` library to talk to Home Assistant's websocket API.
 # Note: The `websockets` package must be installed and available in this environment for the script to work.
 # The here-doc delimiter is single-quoted to prevent shell variable expansion inside the Python script.
+set +e  # Temporarily disable exit on error to capture exit code
 python3 - "$SHORT_LIVED_TOKEN" <<'PYTHON_SCRIPT'
 import asyncio
 import json
@@ -92,8 +93,11 @@ async def generate_long_lived_token(token):
 # Run the async function
 asyncio.run(generate_long_lived_token(sys.argv[1]))
 PYTHON_SCRIPT
+PYTHON_EXIT_CODE=$?
+set -e  # Re-enable exit on error
 
-if [ $? -ne 0 ] || [ ! -f /shared_data/.ha_token ]; then
+# Check if the Python script succeeded and the token file was created
+if [ $PYTHON_EXIT_CODE -ne 0 ] || [ ! -f /shared_data/.ha_token ]; then
   echo "❌ Failed to generate long-lived access token"
   exit 1
 fi
