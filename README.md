@@ -65,14 +65,6 @@ The plugin automatically:
 - [Troubleshooting](documentation/troubleshooting.md)
 - [Development Guide](documentation/development.md)
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
 ## Links
 
 - **Repository**: <https://github.com/MarkTarry/HomeAssistant-Test-Harness>

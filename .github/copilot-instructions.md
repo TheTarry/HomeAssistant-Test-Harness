@@ -39,7 +39,6 @@ This is a **Python package** that:
 ### Configuration Files
 
 - **pyproject.toml**: Package metadata, pytest plugin entry-point, build config
-- **LICENSE**: MIT license
 - **.gitignore**: Python/Docker ignore patterns
 - **.pre-commit-config.yaml**: Code quality hooks (black, isort, flake8, mypy, yamllint, markdownlint)
 - **.markdownlint_style.rb**: Markdown linting rules

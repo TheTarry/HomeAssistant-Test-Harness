@@ -209,15 +209,6 @@ HomeAssistant-Test-Harness/
 └── README.md                          # Project overview
 ```
 
-## Contributing Guidelines
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
-
-- Code of conduct
-- How to submit issues
-- Pull request process
-- Testing requirements
-
 ## CI/CD
 
 ### Continuous Integration
@@ -235,6 +226,5 @@ Manual trigger creates timestamped release with auto-generated notes.
 
 ## Next Steps
 
-- Review [CONTRIBUTING.md](../CONTRIBUTING.md)
 - Check [GitHub Issues](https://github.com/MarkTarry/HomeAssistant-Test-Harness/issues) for tasks
 - Join discussions in issue tracker
