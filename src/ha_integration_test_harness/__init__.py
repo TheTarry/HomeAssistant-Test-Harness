@@ -36,7 +36,13 @@ from .exceptions import (
 from .homeassistant_client import HomeAssistant
 from .time_machine import TimeMachine
 
-__version__ = "0.1.0"
+try:
+    from importlib.metadata import version
+except ImportError:
+    # Python < 3.8
+    from importlib_metadata import version  # type: ignore
+
+__version__ = version("ha_integration_test_harness")
 
 __all__ = [
     "AppDaemon",

@@ -102,20 +102,14 @@ This allows you to:
 
 ### Update Version
 
-Version is defined in two places and must be updated together:
+Version is defined in a single location: **pyproject.toml**
 
-1. **pyproject.toml**: Update the `version` field
+```toml
+[project]
+version = "0.2.0"
+```
 
-   ```toml
-   [project]
-   version = "0.2.0"
-   ```
-
-2. **src/ha_integration_test_harness/__init__.py**: Update `__version__`
-
-   ```python
-   __version__ = "0.2.0"
-   ```
+The version is automatically read at runtime using `importlib.metadata.version()` in `__init__.py`.
 
 ### Semantic Versioning
 
