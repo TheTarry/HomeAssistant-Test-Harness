@@ -4,6 +4,10 @@
 
 The integration test harness provides a complete Docker-based test environment for Home Assistant and AppDaemon. Tests run against real instances, not mocks, ensuring your configuration works correctly.
 
+## Installation
+
+See [Installation Guide](installation.md) for details.
+
 ## How It Works
 
 ### Auto-Discovery
@@ -31,10 +35,10 @@ When you run tests, the harness:
 def test_entity_state(home_assistant):
     """Test setting and reading entity states."""
     home_assistant.set_state("input_boolean.test", "on")
-    
+
     state = home_assistant.get_state("input_boolean.test")
     assert state["state"] == "on"
-    
+
     # Cleanup
     home_assistant.remove_entity("input_boolean.test")
 ```
@@ -48,7 +52,7 @@ def test_scheduled_automation(home_assistant, time_machine):
     """Test automation that triggers at specific time."""
     # Set time to 10:00 AM
     time_machine.set_time(datetime(2026, 1, 21, 10, 0))
-    
+
     # Verify automation triggered
     home_assistant.assert_entity_state("light.morning", "on", timeout=5)
 ```
@@ -59,7 +63,7 @@ def test_scheduled_automation(home_assistant, time_machine):
 def test_automation_with_delay(home_assistant):
     """Test automation that has a delay."""
     home_assistant.set_state("binary_sensor.motion", "on")
-    
+
     # Poll until light turns on (or timeout after 30 seconds)
     home_assistant.assert_entity_state("light.living_room", "on", timeout=30)
 ```
@@ -74,9 +78,9 @@ Always clean up test entities to prevent state pollution:
 def test_with_cleanup(home_assistant):
     entity_id = "switch.test"
     home_assistant.set_state(entity_id, "on")
-    
+
     # ... test logic ...
-    
+
     # Cleanup
     home_assistant.remove_entity(entity_id)
 ```
@@ -91,14 +95,14 @@ import pytest
 @pytest.fixture
 def create_entity(home_assistant):
     created = []
-    
+
     def _create(entity_id, state):
         home_assistant.set_state(entity_id, state)
         created.append(entity_id)
         return entity_id
-    
+
     yield _create
-    
+
     # Automatic cleanup
     for entity_id in created:
         home_assistant.remove_entity(entity_id)
