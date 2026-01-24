@@ -25,6 +25,20 @@ jobs:
       - name: ⤵️ Check out code
         uses: actions/checkout@v6.0.1
 
+      - name: 🔍 Check if release already exists
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |-
+          VERSION="${{ inputs.version }}"
+          TAG="v$VERSION"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG already exists"
+            exit 1
+          fi
+
+          echo "Release $TAG does not exist, proceeding with creation"
+
       - name: 📝 Update version in pyproject.toml
         run: |-
           VERSION="${{ inputs.version }}"
@@ -33,8 +47,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add pyproject.toml
-          git commit -m "Bump version to $VERSION"
-          git push
+          if git diff --staged --quiet; then
+            echo "Version is already set to $VERSION, skipping commit"
+          else
+            git commit -m "Bump version to $VERSION"
+            git push
+          fi
 
       - name: Create GitHub Release
         env:
