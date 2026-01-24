@@ -1,0 +1,11 @@
+---
+# See https://yamllint.readthedocs.io/en/stable/configuration.html
+
+extends: default
+
+rules:
+  line-length:
+    max: 200
+    level: warning
+  new-lines:
+    type: platform
