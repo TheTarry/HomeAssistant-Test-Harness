@@ -27,6 +27,4 @@ jobs:
       - name: 🛠️ Install uv
         uses: astral-sh/setup-uv@v7
       - name: 🛠️ Install dependencies
-        run: uv sync --all-extras --frozen
-      - name: 🔧 Install pre-commit hooks
-        run: uv run pre-commit install
+        run: ./setup_dev_env.sh

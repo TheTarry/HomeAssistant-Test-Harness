@@ -44,6 +44,11 @@ This is a **Python package** that:
 - **.pre-commit-config.yaml**: Code quality hooks (black, isort, flake8, mypy, yamllint, markdownlint)
 - **.markdownlint_style.rb**: Markdown linting rules
 
+### Development Scripts
+
+- **setup_dev_env.sh**: One-command setup (dependencies, pre-commit, validation)
+- **run_checks.sh**: Complete validation suite (pre-commit, build, install test, examples)
+
 ### CI/CD (`.github/workflows/`)
 
 - **ci.yaml**: Runs pre-commit hooks, builds package, validates imports
@@ -106,13 +111,33 @@ This makes fixtures (`docker`, `home_assistant`, `app_daemon`, `time_machine`) a
 
 ## Development Workflow
 
+### Initial Setup
+
+```bash
+./setup_dev_env.sh
+```
+
+This script:
+
+- Installs all dependencies using `uv`
+- Sets up pre-commit hooks
+- Runs initial validation (can skip with `--skip-checks`)
+
 ### Making Changes
 
-1. Install in editable mode: `pip install -e ".[dev]"`
-2. Install pre-commit hooks: `pre-commit install`
-3. Make changes
-4. Run checks: `pre-commit run --all-files`
-5. Test in a real HA repo: `pip install -e /path/to/harness`
+1. Make code changes
+2. Run validation: `./run_checks.sh`
+3. Commit (pre-commit hooks run automatically)
+4. Test in a real HA repo: `uv pip install -e /path/to/harness`
+
+### Validation Script (`run_checks.sh`)
+
+Runs complete validation:
+
+1. Pre-commit hooks (black, isort, flake8, mypy, yamllint, markdownlint)
+2. Package build (`python -m build`)
+3. Installation test (imports package and verifies version)
+4. Example tests (`pytest examples/`)
 
 ### Version Bumping
 
@@ -163,8 +188,9 @@ Follow semantic versioning:
 
 - **No unit tests**: Package is thin wrapper around Docker/APIs
 - **Example tests**: `examples/` directory contains runnable examples
+- **Validation script**: `./run_checks.sh` runs all quality checks, builds package, and runs examples
 - **Manual testing**: Install in editable mode in real HA config repos
-- **CI validation**: Builds package, validates imports
+- **CI validation**: Mirrors `run_checks.sh` - builds package, validates imports, runs pre-commit hooks
 
 ## Important Notes
 

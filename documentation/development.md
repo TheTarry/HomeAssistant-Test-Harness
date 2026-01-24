@@ -14,28 +14,41 @@
 ```bash
 git clone https://github.com/MarkTarry/HomeAssistant-Test-Harness.git
 cd HomeAssistant-Test-Harness
-pip install -e ".[dev]"
+./setup_dev_env.sh
 ```
 
-This installs the package in editable mode with all development dependencies.
+This script:
 
-### Install Pre-commit Hooks
+1. Installs all development dependencies using `uv`
+2. Sets up pre-commit hooks
+3. Runs initial validation (pre-commit checks, build, tests)
+
+**Skip initial validation:** If you want to skip the initial checks, use:
 
 ```bash
-pre-commit install
+./setup_dev_env.sh --skip-checks
 ```
-
-This ensures code quality checks run automatically before each commit.
 
 ## Running Checks
 
-### All Pre-commit Hooks
+### Run All Checks
+
+The `run_checks.sh` script runs all validation steps:
 
 ```bash
-pre-commit run --all-files
+./run_checks.sh
 ```
 
+This script:
+
+1. Runs all pre-commit hooks (black, isort, flake8, mypy, yamllint, markdownlint)
+2. Builds the package distribution
+3. Tests package installation and imports
+4. Runs example tests
+
 ### Individual Tools
+
+You can also run individual checks:
 
 ```bash
 # Format code
@@ -57,32 +70,15 @@ yamllint .
 markdownlint_docker --style .markdownlint_style.rb .
 ```
 
-## Building the Package
+## Testing the Package
 
-### Build Distribution
+### Complete Validation
 
-```bash
-python -m build
-```
-
-This creates wheel and source distributions in `dist/`.
-
-### Test Installation
+Run the complete validation suite (includes building, testing installation, and running examples):
 
 ```bash
-pip install dist/ha_integration_test_harness-*.whl
-python -c "import ha_integration_test_harness; print(ha_integration_test_harness.__version__)"
+./run_checks.sh
 ```
-
-## Running Example Tests
-
-The `examples/` directory contains runnable tests:
-
-```bash
-pytest examples/
-```
-
-**Note:** Examples require a minimal Home Assistant configuration in `examples/config/`.
 
 ## Using Editable Install in Another Project
 
@@ -151,10 +147,10 @@ Follow [semantic versioning](https://semver.org/):
    ```
 
 3. **Create release via GitHub Actions**:
-   - Go to Actions → "Create Release"
-   - Click "Run workflow"
-   - Choose whether to publish immediately or create draft
-   - Workflow generates timestamp-based tag: `yyyy-mm-dd@HH-MM-ss`
+  - Go to Actions → "Create Release"
+  - Click "Run workflow"
+  - Choose whether to publish immediately or create draft
+  - Workflow generates timestamp-based tag: `yyyy-mm-dd@HH-MM-ss`
 
 ### Release Tag Format
 
@@ -189,7 +185,7 @@ Releases use timestamp tags (e.g., `2026-01-21@14-30-00`) automatically generate
 
 ## Project Structure
 
-```
+```tree
 HomeAssistant-Test-Harness/
 ├── src/ha_integration_test_harness/  # Package source
 │   ├── __init__.py                    # Public API exports

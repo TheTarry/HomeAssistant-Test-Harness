@@ -23,13 +23,15 @@ pip install git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git
 
 ### For Development
 
-Clone the repository and install in editable mode:
+Clone the repository and run the setup script:
 
 ```bash
 git clone https://github.com/MarkTarry/HomeAssistant-Test-Harness.git
 cd HomeAssistant-Test-Harness
-pip install -e .
+./setup_dev_env.sh
 ```
+
+This installs dependencies, sets up pre-commit hooks, and runs validation. See the [Development Guide](development.md) for more details.
 
 ## Verification
 
