@@ -82,7 +82,18 @@ Run the complete validation suite (includes building, testing installation, and 
 
 ## Using Editable Install in Another Project
 
-When developing the harness, you can use it in your Home Assistant configuration repository:
+When developing the harness, you can use it as a dev dependency in your Home Assistant configuration repository.
+
+Add to your `pyproject.toml`:
+
+```toml
+[project.optional-dependencies]
+dev = [
+    "ha-integration-test-harness @ file:///path/to/HomeAssistant-Test-Harness",
+]
+```
+
+Or install directly:
 
 ```bash
 # In your HomeAssistant configuration repository
@@ -138,7 +149,14 @@ Releases use version tags with a `v` prefix (e.g., `v0.2.0`).
 ### After Release
 
 - GitHub automatically generates release notes
-- Users can install specific release: `pip install git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git@v0.2.0`
+- Users can install specific release as a dev dependency in their `pyproject.toml`:
+
+```toml
+[project.optional-dependencies]
+dev = [
+    "ha-integration-test-harness @ git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git@v0.2.0",
+]
+```
 
 ## Code Style
 

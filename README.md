@@ -15,9 +15,24 @@ A pytest plugin for integration testing Home Assistant and AppDaemon configurati
 
 ### Installation
 
-```bash
-pip install ha_integration_test_harness
+Since this is a pytest plugin for testing, install it as a **dev dependency** in your Home Assistant configuration repository.
+
+Add to your `pyproject.toml`:
+
+```toml
+[project.optional-dependencies]
+dev = [
+    "ha-integration-test-harness @ git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git",
+]
 ```
+
+Then install:
+
+```bash
+pip install -e ".[dev]"
+```
+
+See the [Installation Guide](documentation/installation.md) for alternative methods.
 
 ### Requirements
 

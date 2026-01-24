@@ -126,9 +126,21 @@ fixture 'home_assistant' not found
 
 **Solution:**
 
-1. Reinstall the package: `pip install --force-reinstall ha_integration_test_harness`
-2. Verify installation: `python -c "import ha_integration_test_harness"`
-3. Check pytest sees the plugin: `pytest --fixtures | grep home_assistant`
+1. Verify the package is in your dev dependencies:
+
+   ```toml
+   # pyproject.toml
+   [project.optional-dependencies]
+   dev = [
+       "ha-integration-test-harness @ git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git",
+   ]
+   ```
+
+2. Reinstall dev dependencies: `pip install -e ".[dev]"`
+
+3. Verify installation: `python -c "import ha_integration_test_harness"`
+
+4. Check pytest sees the plugin: `pytest --fixtures | grep home_assistant`
 
 ### Time Manipulation Not Working
 
