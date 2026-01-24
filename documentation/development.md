@@ -98,20 +98,7 @@ This allows you to:
 - Test changes immediately without reinstalling
 - Develop features while testing against real configuration
 
-## Version Bumping
-
-### Update Version
-
-Version is defined in a single location: **pyproject.toml**
-
-```toml
-[project]
-version = "0.2.0"
-```
-
-The version is automatically read at runtime using `importlib.metadata.version()` in `__init__.py`.
-
-### Semantic Versioning
+## Semantic Versioning
 
 Follow [semantic versioning](https://semver.org/):
 
@@ -139,7 +126,8 @@ Follow [semantic versioning](https://semver.org/):
 - Choose whether to publish immediately or create draft
 - Workflow will:
   - Update version in pyproject.toml
-  - Commit and push the change
+  - Regenerate uv.lock with the new version
+  - Commit and push both files
   - Create a git tag `v<version>` (e.g., `v0.2.0`)
   - Create the GitHub release
 

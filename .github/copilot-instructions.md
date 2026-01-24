@@ -140,26 +140,9 @@ Runs complete validation:
 3. Installation test (imports package and verifies version)
 4. Example tests (`pytest examples/`)
 
-### Version Bumping
-
-Update version in **both**:
-
-- `pyproject.toml`: `version = "0.2.0"`
-- `src/ha_integration_test_harness/__init__.py`: `__version__ = "0.2.0"`
-
-Follow semantic versioning:
-
-- **Major**: Breaking changes to fixtures/API
-- **Minor**: New features (backward compatible)
-- **Patch**: Bug fixes
-
 ### Release Process
 
-1. Bump version (see above)
-2. Commit and push
-3. GitHub Actions "Create Release" workflow
-4. Generates timestamp tag (yyyy-mm-dd@HH-MM-ss)
-5. Creates GitHub release with auto-generated notes
+Automated via GitHub Actions (`.github/workflows/release.yaml`). Copilot will not carry out releases; maintainers must trigger manually.
 
 ## Common Tasks
 
