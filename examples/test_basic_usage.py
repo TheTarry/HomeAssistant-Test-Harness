@@ -18,8 +18,7 @@ def test_entity_state(home_assistant: HomeAssistant) -> None:
 
 def test_polling_for_state_change(home_assistant: HomeAssistant) -> None:
     """Test polling until a state changes."""
-    # Create a timer
-    home_assistant.set_state("timer.test_timer", "active", {"duration": "00:00:05"})
+    # Given a timer entity (see configuration.yaml in the test config directory)
 
     # Poll until timer goes idle (with timeout)
     home_assistant.assert_entity_state("timer.test_timer", "idle", timeout=10)

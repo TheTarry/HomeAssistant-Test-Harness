@@ -10,3 +10,8 @@ frontend:
 
 # Enable system health
 system_health:
+
+timer:
+  # Timer entity which is referenced by example tests
+  test_timer:
+    duration: '00:00:05'
