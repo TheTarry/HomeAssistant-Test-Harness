@@ -1,8 +1,11 @@
-[![Continuous Integration](https://github.com/TheTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml/badge.svg)](https://github.com/TheTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml)
-
 # Home Assistant Integration Test Harness
 
 A pytest plugin for integration testing Home Assistant and AppDaemon configurations using Docker containers.
+
+[![Continuous Integration](https://github.com/TheTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml/badge.svg)](https://github.com/TheTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 ## Features
 
@@ -87,3 +90,22 @@ The plugin automatically:
 - **Repository**: <https://github.com/TheTarry/HomeAssistant-Test-Harness>
 - **Issues**: <https://github.com/TheTarry/HomeAssistant-Test-Harness/issues>
 - **Changelog**: <https://github.com/TheTarry/HomeAssistant-Test-Harness/releases>
+
+## Contributing
+
+Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+
+- Setting up the development environment
+- Code standards and style guide
+- Running tests and validation
+- Submitting pull requests
+
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
+
+## Security
+
+For security issues, please see our [Security Policy](SECURITY.md) for responsible disclosure guidelines.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
