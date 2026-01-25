@@ -19,7 +19,7 @@ jobs:
       contents: read
     steps:
       - name: ⤵️ Check out repository from GitHub
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
       - name: 🐍 Set up Python
         uses: actions/setup-python@v6
         with:
