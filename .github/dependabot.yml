@@ -10,10 +10,6 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "python"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
 
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
@@ -25,7 +21,3 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "github-actions"
-    commit-message:
-      prefix: "ci"
-      include: "scope"
