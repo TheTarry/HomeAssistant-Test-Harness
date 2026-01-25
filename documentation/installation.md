@@ -56,7 +56,7 @@ poetry add --group dev git+https://github.com/MarkTarry/HomeAssistant-Test-Harne
 For quick testing only (doesn't add to your project's dependency list):
 
 ```bash
-pip install git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git
+pip install git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git
 ```
 
 ## Verification

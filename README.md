@@ -82,6 +82,6 @@ The plugin automatically:
 
 ## Links
 
-- **Repository**: <https://github.com/MarkTarry/HomeAssistant-Test-Harness>
-- **Issues**: <https://github.com/MarkTarry/HomeAssistant-Test-Harness/issues>
-- **Changelog**: <https://github.com/MarkTarry/HomeAssistant-Test-Harness/releases>
+- **Repository**: <https://github.com/TheTarry/HomeAssistant-Test-Harness>
+- **Issues**: <https://github.com/TheTarry/HomeAssistant-Test-Harness/issues>
+- **Changelog**: <https://github.com/TheTarry/HomeAssistant-Test-Harness/releases>

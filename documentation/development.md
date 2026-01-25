@@ -12,7 +12,7 @@
 ### Clone and Install
 
 ```bash
-git clone https://github.com/MarkTarry/HomeAssistant-Test-Harness.git
+git clone https://github.com/TheTarry/HomeAssistant-Test-Harness.git
 cd HomeAssistant-Test-Harness
 ./setup_dev_env.sh
 ```
@@ -154,7 +154,7 @@ Releases use version tags with a `v` prefix (e.g., `v0.2.0`).
 ```toml
 [project.optional-dependencies]
 dev = [
-    "ha-integration-test-harness @ git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git@v0.2.0",
+    "ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git@v0.2.0",
 ]
 ```
 
@@ -223,5 +223,5 @@ Manual trigger creates timestamped release with auto-generated notes.
 
 ## Next Steps
 
-- Check [GitHub Issues](https://github.com/MarkTarry/HomeAssistant-Test-Harness/issues) for tasks
+- Check [GitHub Issues](https://github.com/TheTarry/HomeAssistant-Test-Harness/issues) for tasks
 - Join discussions in issue tracker
