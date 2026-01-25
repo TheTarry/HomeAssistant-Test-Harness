@@ -24,7 +24,7 @@ Instead, please use GitHub's private vulnerability reporting feature:
 
 ### What to Include
 
-When using GitHub's vulnerability reporting form or emailing, please include the following information:
+When using GitHub's vulnerability reporting form, please include the following information:
 
 1. **Description**: Clear description of the vulnerability
 2. **Impact**: Potential impact and severity assessment
