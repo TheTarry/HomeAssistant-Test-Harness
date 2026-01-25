@@ -8,14 +8,17 @@ version = "0.1.1"
 description = "Pytest plugin for integration testing Home Assistant and AppDaemon configurations"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
+license-files=["LICENSE"]
 authors = [
-    {name = "Mark Tarry", email = "mark@tarry.io"}
+    {name = "Mark Tarry"}
 ]
 keywords = ["homeassistant", "appdaemon", "testing", "pytest", "integration-tests"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: Pytest",
     "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Testing",
@@ -38,10 +41,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MarkTarry/HomeAssistant-Test-Harness"
-Repository = "https://github.com/MarkTarry/HomeAssistant-Test-Harness"
-Issues = "https://github.com/MarkTarry/HomeAssistant-Test-Harness/issues"
-Documentation = "https://github.com/MarkTarry/HomeAssistant-Test-Harness#readme"
+Homepage = "https://github.com/TheTarry/HomeAssistant-Test-Harness"
+Repository = "https://github.com/TheTarry/HomeAssistant-Test-Harness"
+Issues = "https://github.com/TheTarry/HomeAssistant-Test-Harness/issues"
+Documentation = "https://github.com/TheTarry/HomeAssistant-Test-Harness#readme"
 
 # Register pytest plugin - this makes fixtures auto-discoverable
 [project.entry-points.pytest11]

@@ -2,6 +2,11 @@
 
 A pytest plugin for integration testing Home Assistant and AppDaemon configurations using Docker containers.
 
+[![Continuous Integration](https://github.com/TheTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml/badge.svg)](https://github.com/TheTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 ## Features
 
 - **Docker-based test environment**: Fully isolated Home Assistant and AppDaemon instances
@@ -15,9 +20,24 @@ A pytest plugin for integration testing Home Assistant and AppDaemon configurati
 
 ### Installation
 
-```bash
-pip install ha_integration_test_harness
+Since this is a pytest plugin for testing, install it as a **dev dependency** in your Home Assistant configuration repository.
+
+Add to your `pyproject.toml`:
+
+```toml
+[project.optional-dependencies]
+dev = [
+    "ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git",
+]
 ```
+
+Then install:
+
+```bash
+pip install -e ".[dev]"
+```
+
+See the [Installation Guide](documentation/installation.md) for alternative methods.
 
 ### Requirements
 
@@ -67,6 +87,25 @@ The plugin automatically:
 
 ## Links
 
-- **Repository**: <https://github.com/MarkTarry/HomeAssistant-Test-Harness>
-- **Issues**: <https://github.com/MarkTarry/HomeAssistant-Test-Harness/issues>
-- **Changelog**: <https://github.com/MarkTarry/HomeAssistant-Test-Harness/releases>
+- **Repository**: <https://github.com/TheTarry/HomeAssistant-Test-Harness>
+- **Issues**: <https://github.com/TheTarry/HomeAssistant-Test-Harness/issues>
+- **Changelog**: <https://github.com/TheTarry/HomeAssistant-Test-Harness/releases>
+
+## Contributing
+
+Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+
+- Setting up the development environment
+- Code standards and style guide
+- Running tests and validation
+- Submitting pull requests
+
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
+
+## Security
+
+For security issues, please see our [Security Policy](SECURITY.md) for responsible disclosure guidelines.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

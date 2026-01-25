@@ -9,10 +9,54 @@
 
 ## Installation
 
-### From GitHub
+Since this is a **pytest plugin** for testing Home Assistant configurations, it should be installed as a **development dependency** in your Home Assistant configuration repository.
+
+### Method 1: pyproject.toml (Recommended)
+
+Add to your `pyproject.toml`:
+
+```toml
+[project.optional-dependencies]
+dev = [
+    "ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git",
+    # Add other dev dependencies here (e.g., pytest, black, mypy)
+]
+```
+
+Then install with:
 
 ```bash
-pip install git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git
+pip install -e ".[dev]"
+```
+
+### Method 2: requirements-dev.txt
+
+Create a `requirements-dev.txt` file:
+
+```text
+ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git
+```
+
+Then install with:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+### Method 3: Poetry
+
+If you use Poetry:
+
+```bash
+poetry add --group dev git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git
+```
+
+### Method 4: Direct Install (Not Recommended)
+
+For quick testing only (doesn't add to your project's dependency list):
+
+```bash
+pip install git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git
 ```
 
 ## Verification

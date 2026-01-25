@@ -10,7 +10,7 @@
 DockerError: configuration.yaml not found at /path/to/config/configuration.yaml.
 Tests must be run from a Home Assistant configuration directory.
 Set HOME_ASSISTANT_CONFIG_ROOT environment variable to specify the location.
-See: https://github.com/MarkTarry/HomeAssistant-Test-Harness#usage
+See: https://github.com/TheTarry/HomeAssistant-Test-Harness/blob/main/documentation/usage.md
 ```
 
 **Cause:** Tests cannot find your Home Assistant `configuration.yaml` file.
@@ -94,7 +94,7 @@ The harness uses ephemeral ports by default, so this should be rare. If you enco
    # In your pyproject.toml
    [project.optional-dependencies]
    dev = [
-       "ha-integration-test-harness @ git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git@v0.1.1"
+       "ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git@v0.1.1"
    ]
    ```
 
@@ -126,9 +126,21 @@ fixture 'home_assistant' not found
 
 **Solution:**
 
-1. Reinstall the package: `pip install --force-reinstall ha_integration_test_harness`
-2. Verify installation: `python -c "import ha_integration_test_harness"`
-3. Check pytest sees the plugin: `pytest --fixtures | grep home_assistant`
+1. Verify the package is in your dev dependencies:
+
+   ```toml
+   # pyproject.toml
+   [project.optional-dependencies]
+   dev = [
+       "ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git",
+   ]
+   ```
+
+2. Reinstall dev dependencies: `pip install -e ".[dev]"`
+
+3. Verify installation: `python -c "import ha_integration_test_harness"`
+
+4. Check pytest sees the plugin: `pytest --fixtures | grep home_assistant`
 
 ### Time Manipulation Not Working
 
@@ -217,7 +229,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 If you encounter issues not covered here:
 
-1. Check [GitHub Issues](https://github.com/MarkTarry/HomeAssistant-Test-Harness/issues)
+1. Check [GitHub Issues](https://github.com/TheTarry/HomeAssistant-Test-Harness/issues)
 2. Open a new issue with:
   - Full error message
   - Test code that reproduces the issue
