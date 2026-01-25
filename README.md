@@ -24,7 +24,7 @@ Add to your `pyproject.toml`:
 ```toml
 [project.optional-dependencies]
 dev = [
-    "ha-integration-test-harness @ git+https://github.com/MarkTarry/HomeAssistant-Test-Harness.git",
+    "ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git",
 ]
 ```
 
