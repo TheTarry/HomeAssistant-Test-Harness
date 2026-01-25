@@ -98,7 +98,7 @@ Repository rulesets enforce PR reviews and required checks before merging.
 
 ## Code of Conduct
 
-This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold this code. Please report unacceptable behavior to the conntributors.
+This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold this code. Please report unacceptable behavior to the contributors.
 
 ## Questions
 
