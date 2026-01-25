@@ -1,3 +1,5 @@
+[![Continuous Integration](https://github.com/TheTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml/badge.svg)](https://github.com/TheTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml)
+
 # Home Assistant Integration Test Harness
 
 A pytest plugin for integration testing Home Assistant and AppDaemon configurations using Docker containers.
