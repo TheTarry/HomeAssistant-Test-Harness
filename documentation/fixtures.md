@@ -109,6 +109,8 @@ Manages time manipulation for deterministic testing of time-based automations.
 
 ```python
 time_machine.set_time(dt: datetime) -> None
+time_machine.set_time(t: time) -> None
+time_machine.set_time(preset: str, offset: timedelta = timedelta()) -> None
 time_machine.advance_time(seconds: int) -> None
 time_machine.reset_time() -> None
 ```
@@ -116,11 +118,20 @@ time_machine.reset_time() -> None
 ### time_machine Usage
 
 ```python
-from datetime import datetime
+from datetime import datetime, time, timedelta
 
 def test_time_manipulation(home_assistant, time_machine):
-    # Freeze time at specific moment
+    # Freeze time at specific datetime
     time_machine.set_time(datetime(2026, 1, 21, 10, 30))
+
+    # Set time to 7:30 AM today
+    time_machine.set_time(time(7, 30))
+
+    # Set time to 30 minutes after sunrise
+    time_machine.set_time("sunrise", timedelta(minutes=30))
+
+    # Set time to 1 hour before sunset
+    time_machine.set_time("sunset", timedelta(hours=-1))
 
     # Advance time by 60 seconds
     time_machine.advance_time(60)
@@ -138,6 +149,32 @@ def test_time_manipulation(home_assistant, time_machine):
 Freezes time at specified datetime. All time-based automations see this time.
 
 - **dt**: `datetime` object (timezone-aware or naive)
+
+#### `set_time(t)`
+
+Freezes time at specified time today. Combines the current date with the provided time.
+
+- **t**: `time` object (e.g., `time(7, 30)` for 7:30 AM)
+
+#### `set_time(preset, offset=timedelta())`
+
+Sets time relative to sunrise or sunset. Uses the `sun.sun` entity from Home Assistant to determine sunrise/sunset times.
+
+- **preset**: Either `"sunrise"` or `"sunset"`
+- **offset**: Optional `timedelta` to add to the preset time (can be negative to go back)
+
+Examples:
+
+```python
+# At sunrise
+time_machine.set_time("sunrise")
+
+# 30 minutes after sunrise
+time_machine.set_time("sunrise", timedelta(minutes=30))
+
+# 1 hour before sunset
+time_machine.set_time("sunset", timedelta(hours=-1))
+```
 
 #### `advance_time(seconds)`
 
