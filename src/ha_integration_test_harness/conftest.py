@@ -118,6 +118,7 @@ def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) ->
     machine = TimeMachine(
         apply_faketime=lambda content: docker.write_container_file("homeassistant", "/shared_data/.faketime", content),
         on_time_set=lambda: home_assistant.regenerate_access_token(),
+        get_entity_state=lambda entity_id: home_assistant.get_state(entity_id),
     )
     yield machine
     # Teardown: reset time to real time for next test
