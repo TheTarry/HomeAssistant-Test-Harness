@@ -18,11 +18,7 @@ uv run python -c "import ha_integration_test_harness; print(f'✅ Successfully i
 
 echo ""
 echo "🧪 Running example tests..."
-HOME_ASSISTANT_CONFIG_ROOT="$(pwd)/examples/config"
-export HOME_ASSISTANT_CONFIG_ROOT
-APPDAEMON_CONFIG_ROOT="$(pwd)/examples/appdaemon"
-export APPDAEMON_CONFIG_ROOT
-uv run pytest examples/
+uv run --env-file .env pytest examples/
 
 echo ""
 echo "✅ All checks passed!"

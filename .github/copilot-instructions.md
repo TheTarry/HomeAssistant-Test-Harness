@@ -122,6 +122,7 @@ This script:
 
 - Installs all dependencies using `uv`
 - Sets up pre-commit hooks
+- Creates a `.env` file for local environment variables
 - Runs initial validation (can skip with `--skip-checks`)
 
 ### Making Changes

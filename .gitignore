@@ -29,6 +29,9 @@ automations.yaml
 # Container shared volume
 shared_data/
 
+# Local workspace
+.env
+
 # Package build artifacts
 *.egg
 *.whl
