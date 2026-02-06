@@ -199,6 +199,8 @@ def test_multiple_entities(create_entity):
 Only request `time_machine` fixture in tests that need time manipulation:
 
 ```python
+from datetime import timedelta
+
 # Don't do this - time machine in every test
 def test_normal(home_assistant, time_machine):
     pass
