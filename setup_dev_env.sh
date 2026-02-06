@@ -3,7 +3,11 @@ set -e
 set -o pipefail
 
 echo "🛠️ Installing development dependencies..."
-uv sync --all-extras
+if [[ -n "$GITHUB_ACTIONS" ]]; then
+    uv sync --all-extras --frozen
+else
+    uv sync --all-extras
+fi
 
 echo ""
 echo "🪝 Setting up git hooks..."
