@@ -194,7 +194,7 @@ TimeMachineError: Cannot advance to sunrise: calculated target time would not be
 result in a target time before the current fake time.
 
 In theory this would never happen, as Home Assistant's `next_rising` and `next_setting` values should always be in the future. The test harness
-guards against this due to potential complications with maniupating fake time.
+guards against this due to potential complications with manipulating fake time.
 
 **Solution:**
 
