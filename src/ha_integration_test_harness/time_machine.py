@@ -239,22 +239,29 @@ class TimeMachine:
                 raise ValueError(f"Invalid month name '{month}'. Use full name or 3-char abbreviation (e.g., 'Jan', 'January').")
 
             target_month = MONTH_NAMES[month_lower]
+            original_day = target_dt.day
 
             # If target month is same as current, we're already there
             # If target month is earlier in year, advance to next year
             if target_month <= target_dt.month:
-                # Advance to next year, and clamp day to last valid day of target month
-                target_dt = target_dt + relativedelta(years=1, month=target_month, day=min(target_dt.day, 28))
-                # Use relativedelta to safely set to last day of month if needed
-                if target_dt.day < current_time.day:
-                    target_dt = target_dt + relativedelta(day=31)  # Gets last day of month
-            else:
-                # Same year, use relativedelta to handle month-end edge cases
+                # Advance to next year and safely set month
+                # relativedelta with day=31 sets to last valid day of the month
+                target_dt = target_dt + relativedelta(years=1, month=target_month)
+                # Try to preserve the original day, or use last day of month if it doesn't exist
                 try:
-                    target_dt = target_dt.replace(month=target_month)
+                    target_dt = target_dt.replace(day=original_day)
                 except ValueError:
-                    # Day doesn't exist in target month (e.g., Jan 31 -> Feb), clamp to last day
-                    target_dt = target_dt + relativedelta(month=target_month, day=31)
+                    # Day doesn't exist in target month, use last day
+                    target_dt = target_dt + relativedelta(day=31)  # relativedelta day=31 gives last day of month
+            else:
+                # Same year, safely set month
+                target_dt = target_dt + relativedelta(month=target_month)
+                # Try to preserve the original day
+                try:
+                    target_dt = target_dt.replace(day=original_day)
+                except ValueError:
+                    # Day doesn't exist in target month, use last day
+                    target_dt = target_dt + relativedelta(day=31)  # relativedelta day=31 gives last day of month
 
         # Step 2: Apply day_of_month constraint if specified
         if day_of_month is not None:

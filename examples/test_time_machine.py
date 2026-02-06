@@ -101,9 +101,7 @@ def test_jump_to_next_month(home_assistant: HomeAssistant, time_machine: TimeMac
         expected_year = before_dt.year
 
     # Use the expected month/year to derive the month name for jump_to_next
-    from datetime import datetime as dt_class
-
-    next_month_dt = dt_class(expected_year, expected_month, 1)
+    next_month_dt = datetime(expected_year, expected_month, 1)
     next_month_name = next_month_dt.strftime("%b")
 
     # Jump to next month (preserves current day and time)
