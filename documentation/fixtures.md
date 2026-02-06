@@ -101,108 +101,210 @@ def test_appdaemon(app_daemon):
     print(app_daemon.base_url)
 ```
 
-## `time_machine` (function scope)
+## `time_machine` (session scope)
 
 Manages time manipulation for deterministic testing of time-based automations.
+
+**IMPORTANT LIMITATION**: Time can only move forward, never backward. The fixture is session-scoped, meaning time persists
+across all tests in the session and cannot be reset to real time or an earlier point. This is a fundamental constraint of the Home Assistant container.
 
 ### time_machine API
 
 ```python
-time_machine.set_time(dt: datetime) -> None
-time_machine.set_time(t: time) -> None
-time_machine.set_time(preset: str, offset: timedelta = timedelta()) -> None
-time_machine.advance_time(seconds: int) -> None
-time_machine.reset_time() -> None
+time_machine.fast_forward(delta: timedelta) -> None
+time_machine.jump_to_next(month=None, day=None, day_of_month=None, hour=None, minute=None, second=None) -> None
+time_machine.advance_to_preset(preset: str, offset: Optional[timedelta] = None) -> None
 ```
 
 ### time_machine Usage
 
 ```python
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 
 def test_time_manipulation(home_assistant, time_machine):
-    # Freeze time at specific datetime
-    time_machine.set_time(datetime(2026, 1, 21, 10, 30))
+    # Advance time by 5 days
+    time_machine.fast_forward(timedelta(days=5))
 
-    # Set time to 7:30 AM today
-    time_machine.set_time(time(7, 30))
+    # Jump to next Monday at 10:00 AM
+    time_machine.jump_to_next(day="Monday", hour=10, minute=0)
 
-    # Set time to 30 minutes after sunrise
-    time_machine.set_time("sunrise", timedelta(minutes=30))
-
-    # Set time to 1 hour before sunset
-    time_machine.set_time("sunset", timedelta(hours=-1))
-
-    # Advance time by 60 seconds
-    time_machine.advance_time(60)
+    # Advance to 30 minutes after next sunrise
+    time_machine.advance_to_preset("sunrise", timedelta(minutes=30))
 
     # Verify time-based automation triggered
     home_assistant.assert_entity_state("light.scheduled", "on")
 
-    # Time automatically resets after test
+    # NOTE: Time cannot be reset - it persists for the entire test session
 ```
 
 ### time_machine Methods
 
-#### `set_time(dt)`
+#### `fast_forward(delta: timedelta)`
 
-Freezes time at specified datetime. All time-based automations see this time.
+Advances time forward by the specified timedelta. The advancement is cumulative - calling this method multiple times will continue advancing from the current fake time.
 
-- **dt**: `datetime` object (timezone-aware or naive)
+**Parameters:**
 
-#### `set_time(t)`
+- **delta**: A timedelta object specifying the amount of time to advance. Supports weeks, days, hours, minutes, seconds, and microseconds.
 
-Freezes time at specified time today. Combines the current date with the provided time.
-
-- **t**: `time` object (e.g., `time(7, 30)` for 7:30 AM)
-
-#### `set_time(preset, offset=timedelta())`
-
-Sets time relative to sunrise or sunset. Uses the `sun.sun` entity from Home Assistant to determine sunrise/sunset times.
-
-- **preset**: Either `"sunrise"` or `"sunset"`
-- **offset**: Optional `timedelta` to add to the preset time (can be negative to go back)
-
-Examples:
+**Examples:**
 
 ```python
-# At sunrise
-time_machine.set_time("sunrise")
+# Advance by 1 day
+time_machine.fast_forward(timedelta(days=1))
 
-# 30 minutes after sunrise
-time_machine.set_time("sunrise", timedelta(minutes=30))
+# Advance by 1 hour and 30 minutes
+time_machine.fast_forward(timedelta(hours=1, minutes=30))
 
-# 1 hour before sunset
-time_machine.set_time("sunset", timedelta(hours=-1))
+# Advance by 2 weeks, 3 days, and 4 hours
+time_machine.fast_forward(timedelta(weeks=2, days=3, hours=4))
+
+# Advance by 30 seconds
+time_machine.fast_forward(timedelta(seconds=30))
 ```
 
-#### `advance_time(seconds)`
+**Raises:**
 
-Advances time by specified number of seconds from current frozen time.
+- `ValueError`: If delta is negative (time can only move forward)
+- `TimeMachineError`: If time manipulation fails
 
-- **seconds**: Number of seconds to advance
+#### `jump_to_next(month=None, day=None, day_of_month=None, hour=None, minute=None, second=None)`
 
-#### `reset_time()`
+Jumps to the next occurrence of specified calendar constraints. Constraints are applied in a specific order:
 
-Returns to real system time. Called automatically in fixture teardown.
+1. **Month**: Advance to next occurrence of specified month
+2. **Day of month**: Set the day of the month (may advance to next month if needed)
+3. **Weekday**: Advance to next occurrence of specified weekday
+4. **Time**: Set hour/minute/second (preserving unspecified components)
+
+All parameters are optional. Unspecified time components (hour/minute/second) preserve their values from the current fake time.
+
+**Parameters:**
+
+- **month**: Month name ("Jan"/"January") or 3-char abbreviation (case-insensitive)
+- **day**: Weekday name ("Mon"/"Monday") or 3-char abbreviation (case-insensitive)
+- **day_of_month**: Day of the month (1-31). Applied after month, before weekday
+- **hour**: Hour of day (0-23). Preserves current hour if omitted
+- **minute**: Minute (0-59). Preserves current minute if omitted
+- **second**: Second (0-59). Preserves current second if omitted
+
+**Examples:**
+
+```python
+# Jump to next Monday at current time
+time_machine.jump_to_next(day="Monday")
+
+# Jump to next February, preserving current day and time
+time_machine.jump_to_next(month="Feb")
+
+# Jump to 1st of next month
+time_machine.jump_to_next(day_of_month=1)
+
+# Complex: From Jan 31 14:30:00, jump to next Monday in February at 10:00:00
+# Result: Feb 3 10:00:00 (1st of Feb is Sat, next Mon is 3rd, time set to 10:00)
+time_machine.jump_to_next(month="Feb", day="Monday", hour=10)
+```
+
+**Constraint Resolution Order Example:**
+
+From **Tue Jan 31 14:30:00**, calling:
+
+```python
+time_machine.jump_to_next(day_of_month=1, day="Monday", hour=10)
+```
+
+**Step-by-step execution:**
+
+1. Set to **1st of next month** → **Feb 1 14:30:00** (Feb 1 is Saturday)
+2. Advance to **next Monday** → **Feb 3 14:30:00**
+3. Set **hour to 10** → **Feb 3 10:30:00** (minutes/seconds preserved)
+
+**Another example** - From **Tue Jan 31 14:30:00**, calling:
+
+```python
+time_machine.jump_to_next(month="Feb", day_of_month=1, day="Monday")
+```
+
+**Step-by-step execution:**
+
+1. Jump to **February** → **Feb 28 14:30:00** (or Feb 29 in leap year, same day-of-month as current)
+2. Set to **1st** → **Mar 1 14:30:00** (Feb 1 is in the past, so next occurrence is March 1)
+3. Advance to **next Monday** → **Mar 3 14:30:00** (if Mar 1 is Saturday)
+
+**Raises:**
+
+- `ValueError`: If month/day names are invalid or numeric values out of range
+- `TimeMachineError`: If result would not be in the future or manipulation fails
+
+#### `advance_to_preset(preset, offset=None)`
+
+Advances time to the next sunrise or sunset, with optional offset. Uses the `sun.sun` entity from Home Assistant to determine sunrise/sunset times.
+
+**Parameters:**
+
+- **preset**: Either "sunrise" or "sunset" (case-insensitive)
+- **offset**: Optional `timedelta` to add to the preset time (can be negative for "before")
+
+**Examples:**
+
+```python
+# Advance to next sunrise
+time_machine.advance_to_preset("sunrise")
+
+# Advance to 30 minutes after next sunrise
+time_machine.advance_to_preset("sunrise", timedelta(minutes=30))
+
+# Advance to 1 hour before next sunset
+time_machine.advance_to_preset("sunset", timedelta(hours=-1))
+```
+
+**Raises:**
+
+- `ValueError`: If get_entity_state callback is not configured or preset is invalid
+- `TimeMachineError`: If entity fetch fails, parsing fails, or result would not be in future
 
 ### Limitations and Considerations
 
-#### Time Can Only Move Forward
+#### Time Can Only Move Forward (Critical Limitation)
 
-The `advance_time()` method only accepts non-negative values. To go back in time, use `set_time()` to jump to a specific earlier moment:
+**You CANNOT move time backward or reset time to real time.** This is a fundamental constraint of the Home Assistant container.
 
 ```python
 # ✅ Supported - advance forward
-time_machine.advance_time(60)  # Advance 60 seconds
+time_machine.fast_forward(timedelta(days=1))
 
-# ❌ Not allowed - negative values
-time_machine.advance_time(-60)  # Raises ValueError
+# ✅ Supported - jump to next occurrence (always in future)
+time_machine.jump_to_next(day="Monday")
 
-# ✅ To go back, use set_time() instead
-time_machine.set_time(datetime(2026, 1, 5, 10, 0))  # Jump to 10:00 AM
-time_machine.advance_time(3600)  # Advance to 11:00 AM
-time_machine.set_time(datetime(2026, 1, 5, 9, 0))   # Jump back to 9:00 AM
+# ❌ NOT SUPPORTED - cannot move time backward
+# Once time has advanced, it CANNOT go back
+
+# ❌ This will raise an error:
+time_machine.fast_forward(timedelta(days=-1))  # Negative values not allowed
+
+# ❌ There is NO way to reset time to real time or an earlier point
+# No reset_time() method exists
+```
+
+#### Session-Scoped Fixture Means Persistent Time
+
+The `time_machine` fixture is **session-scoped**, meaning time persists across all tests in the session. Tests must explicitly advance time to their desired starting conditions.
+
+**Best practice:** Each test that uses time manipulation should explicitly set its initial time state:
+
+```python
+def test_morning_automation(home_assistant, time_machine):
+    # Explicitly advance to desired starting time
+    time_machine.jump_to_next(day="Monday", hour=7)
+
+    # ... test logic ...
+
+def test_evening_automation(home_assistant, time_machine):
+    # This test runs AFTER test_morning_automation, so time is already
+    # Monday 7:XX. We need to explicitly advance to evening:
+    time_machine.jump_to_next(hour=19)  # 7 PM
+
+    # ... test logic ...
 ```
 
 #### Second-Level Granularity
@@ -211,10 +313,10 @@ Time manipulation works at second-level precision. Sub-second accuracy is not su
 
 ```python
 # ✅ Supported
-time_machine.advance_time(60)  # 60 seconds
+time_machine.fast_forward(timedelta(seconds=60))
 
-# ❌ Not meaningful (will advance 3 seconds, not 3.5)
-time_machine.advance_time(3.5)  # Don't rely on fractional seconds
+# ⚠️ Fractional seconds are truncated
+time_machine.fast_forward(timedelta(seconds=3, milliseconds=500))  # Can only advance by whole seconds
 ```
 
 #### Timezone is Fixed
@@ -226,40 +328,42 @@ All tests use `Europe/London` timezone. You cannot change the timezone during a 
 Both Home Assistant and AppDaemon share the same fake clock. You cannot set different times for
 each container.
 
-#### State vs Time Persistence
+#### State Persistence Across Tests
 
-The `docker`, `home_assistant`, and `app_daemon` fixtures are
-session-scoped, so entity states persist across tests. The `time_machine` fixture is
-function-scoped and automatically resets time after each test that uses it, but
-entity states remain.
+The `docker`, `home_assistant`, and `app_daemon` fixtures are session-scoped, so entity states persist across tests. The `time_machine` fixture is also session-scoped,
+so time persists and cannot be reset.
 
-**Best practice:** Always set initial time at the start of tests that use time
-manipulation, and reset relevant entity states if needed.
+**Best practice:** Always explicitly set initial time at the start of tests that use time manipulation. Reset relevant entity states if needed:
+
+```python
+def test_automation_sequence(home_assistant, time_machine):
+    # Set initial conditions
+    time_machine.jump_to_next(day="Monday", hour=6, minute=0, second=0) # Start from known time
+    home_assistant.set_state("input_boolean.test_mode", "off")
+
+    # ... test logic ...
+```
 
 #### Real-Time Services May Behave Differently
 
 Some Home Assistant integrations rely on real-time APIs (e.g., weather services, sun position
-calculations). These may not respond correctly to fake time. Test external integrations with mock
-data or acceptance tests.
-
-### Example: Comprehensive Time-Based Test
+calculations). These may not respond correctly with a fake time set.
 
 ```python
-from datetime import datetime
 from ha_integration_test_harness import HomeAssistant, TimeMachine
 
 def test_heating_schedule(home_assistant: HomeAssistant, time_machine: TimeMachine):
     """Test that heating turns on at scheduled time and turns off after delay."""
 
-    # Set time to Monday morning before heating schedule
-    time_machine.set_time(datetime(2026, 1, 5, 6, 0))  # 6:00 AM
+    # Advance to Monday morning before heating schedule (6:00 AM)
+    time_machine.jump_to_next(day="Monday", hour=6, minute=0, second=0)
 
     # Verify heating is off
     state = home_assistant.get_state("climate.thermostat")
     assert state["attributes"]["hvac_action"] == "off"
 
     # Advance to heating schedule start (7:00 AM)
-    time_machine.advance_time(3600)  # +1 hour
+    time_machine.fast_forward(timedelta(hours=1))
 
     # Verify heating turned on
     home_assistant.assert_entity_state("climate.thermostat", "heat", timeout=10)
@@ -270,27 +374,18 @@ def test_heating_schedule(home_assistant: HomeAssistant, time_machine: TimeMachi
     # Verify heating turned off (automation should detect absence)
     home_assistant.assert_entity_state("climate.thermostat", "off", timeout=5)
 
-    # Time is automatically reset to real time after this test completes
+    # NOTE: Time remains at Monday 7:00 AM for subsequent test
 ```
 
-## Fixture Scopes
-
-### Session Scope
-
-`docker`, `home_assistant`, `app_daemon` are session-scoped:
+All fixtures (`docker`, `home_assistant`, `app_daemon`, `time_machine`) are session-scoped:
 
 - Created once when first test requests them
 - Shared across all tests in the session
 - Torn down after all tests complete
 - Provides fast test execution (containers start once)
+- **Time and entity states persist across tests**
 
-### Function Scope
-
-`time_machine` is function-scoped:
-
-- Created fresh for each test that requests it
-- Automatically resets time after each test
-- Isolates time manipulation between tests
+**Important:** Because time persists and cannot be reset, time-dependent test scenarios should always explicitly set their initial time conditions.
 
 ## Next Steps
 

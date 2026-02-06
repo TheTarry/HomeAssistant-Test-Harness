@@ -153,7 +153,64 @@ fixture 'home_assistant' not found
 1. Check container logs for libfaketime installation messages
 2. Verify `/shared_data/.faketime` file exists in container
 3. Ensure `time_machine` fixture is requested in your test
-4. Check that you called `time_machine.set_time()` before expecting time-based behavior
+4. Check that you explicitly advanced time (e.g., `time_machine.fast_forward(timedelta(days=1))`) before expecting time-based behavior
+5. Remember that time can only move forward - if you need to test an earlier time, structure your tests accordingly
+
+### Cannot Move Time Backward
+
+**Symptoms:** Error when trying to move time to an earlier point, or tests behave unexpectedly when time should "reset."
+
+**Cause:** Time can only move forward in the harness - this is a fundamental limitation of HomeAssistant's use of a monotonic clock.
+
+**Solution:**
+
+Time cannot be moved backward or reset to real time. The `time_machine` fixture is session-scoped, meaning time manipulations persist across all tests. Some general guidance:
+
+1. **Advance time in minimal increments:**
+
+   ```python
+   def test_monday_morning(time_machine):
+       # Jump to the nearest time which is relevant for your test
+       # Avoid jumping ahead by months/weeks unless absolutely necessary
+       time_machine.jump_to_next(day="Monday", hour=7)
+       # ... test morning morning automation ...
+   ```
+
+### Sunrise/Sunset Preset Fails
+
+**Symptoms:** `TimeMachineError` when using `advance_to_preset("sunrise")` or `advance_to_preset("sunset")`.
+
+**Error:**
+
+```text
+TimeMachineError: Cannot advance to sunrise: calculated target time would not be in the future.
+  Current fake time: 2026-02-01 10:00:00
+  Preset (sunrise): 2026-02-01 08:30:00
+  Offset applied: +1:00:00
+  Target time: 2026-02-01 09:30:00
+```
+
+**Cause:** The `sun.sun` entity's `next_rising` or `next_setting` value is before the current fake time and/or the specified offset would
+result in a target time before the current fake time.
+
+In theory this would never happen, as Home Assistant's `next_rising` and `next_setting` values should always be in the future. The test harness
+guards against this due to potential complications with maniupating fake time.
+
+**Solution:**
+
+1. **Advance time forward before using presets:**
+
+   ```python
+   time_machine.fast_forward(timedelta(days=1))
+   time_machine.advance_to_preset("sunrise")
+   ```
+
+2. **Check sun.sun entity state for diagnostics:**
+
+   ```python
+   sun_state = home_assistant.get_state("sun.sun")
+   print(sun_state["attributes"]["next_rising"])
+   ```
 
 ### Tests Hang or Timeout
 
