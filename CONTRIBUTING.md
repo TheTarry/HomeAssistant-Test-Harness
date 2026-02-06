@@ -18,8 +18,8 @@ This script will:
 
 - Install all development dependencies using `uv`
 - Set up pre-commit hooks
-3. Creates a `.env` file for local environment variables
-4. Runs initial validation
+- Creates a `.env` file for local environment variables
+- Runs initial validation
 
 ## Code Standards
 
