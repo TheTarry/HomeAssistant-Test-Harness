@@ -91,17 +91,29 @@ def test_jump_to_next_month(home_assistant: HomeAssistant, time_machine: TimeMac
     # Query current time before jump
     before_state = home_assistant.get_state("sensor.current_datetime")
     before_dt = parse_datetime(before_state["state"])
-    before_month = before_dt.month
-    next_month_name = (before_dt + timedelta(weeks=4)).strftime("%b")
+
+    # Compute the actual next calendar month (handle December wrap-around)
+    if before_dt.month == 12:
+        expected_month = 1
+        expected_year = before_dt.year + 1
+    else:
+        expected_month = before_dt.month + 1
+        expected_year = before_dt.year
+
+    # Use the expected month/year to derive the month name for jump_to_next
+    from datetime import datetime as dt_class
+
+    next_month_dt = dt_class(expected_year, expected_month, 1)
+    next_month_name = next_month_dt.strftime("%b")
 
     # Jump to next month (preserves current day and time)
     time_machine.jump_to_next(month=next_month_name)
 
-    # Verify we advanced to month after we started
+    # Verify we advanced to the expected next month
     after_state = home_assistant.get_state("sensor.current_datetime")
     after_dt = parse_datetime(after_state["state"])
     assert after_dt >= before_dt  # Time moved forward
-    assert after_dt.month == before_month + 1  # Move on to next month
+    assert after_dt.month == expected_month  # Moved to next calendar month
     # Verify time components preserved (hour, minute, second)
     assert after_dt.time() == before_dt.time()
 

@@ -18,7 +18,14 @@ uv run python -c "import ha_integration_test_harness; print(f'✅ Successfully i
 
 echo ""
 echo "🧪 Running example tests..."
-uv run --env-file .env pytest examples/
+if [ -f .env ]; then
+  echo "Using .env environment file for example tests..."
+  uv run --env-file .env pytest examples/
+else
+  echo "⚠️ .env not found. Running example tests without an environment file."
+  echo "   If you encounter configuration issues, run ./setup_dev_env.sh to generate .env."
+  uv run pytest examples/
+fi
 
 echo ""
 echo "✅ All checks passed!"

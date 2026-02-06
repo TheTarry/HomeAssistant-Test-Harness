@@ -87,7 +87,18 @@ class TimeMachine:
         self._apply_faketime = apply_faketime
         self._on_time_set = on_time_set
         self._get_entity_state = get_entity_state
-        self._fake_time: datetime = datetime.now()
+        self._fake_time: Optional[datetime] = None
+
+    def _get_current_time(self) -> datetime:
+        """Get current fake time, initializing lazily if needed.
+
+        Returns:
+            Current fake time as a datetime object.
+        """
+        if self._fake_time is None:
+            # Lazy initialization: use current time on first operation
+            self._fake_time = datetime.now().replace(microsecond=0)
+        return self._fake_time
 
     def _set_time(self, target_dt: datetime, log_message: str, error_message_prefix: str) -> None:
         """Apply time change to faketime and update internal state.
@@ -103,6 +114,9 @@ class TimeMachine:
         Raises:
             TimeMachineError: If time manipulation fails.
         """
+        # Normalize to whole-second precision to avoid drift between internal clock and container clock
+        target_dt = target_dt.replace(microsecond=0)
+
         # Format datetime for libfaketime: "@YYYY-MM-DD HH:MM:SS"
         time_str = target_dt.strftime("@%Y-%m-%d %H:%M:%S")
 
@@ -148,9 +162,9 @@ class TimeMachine:
         if delta.total_seconds() < 0:
             raise ValueError(f"Cannot advance time backwards: delta={delta}. Time can only move forward.")
 
-        # Calculate target time
+        # Calculate target time from current fake time
         try:
-            target_dt = self._fake_time + delta
+            target_dt = self._get_current_time() + delta
         except (ValueError, OverflowError) as e:
             raise TimeMachineError(f"Failed to calculate target time: {e}")
 
@@ -215,7 +229,8 @@ class TimeMachine:
             ValueError: If month/day names are invalid or numeric values out of range.
             TimeMachineError: If time manipulation fails.
         """
-        target_dt = self._fake_time
+        current_time = self._get_current_time()
+        target_dt = current_time
 
         # Step 1: Apply month constraint if specified
         if month is not None:
@@ -228,11 +243,18 @@ class TimeMachine:
             # If target month is same as current, we're already there
             # If target month is earlier in year, advance to next year
             if target_month <= target_dt.month:
-                # Advance to next year
-                target_dt = target_dt + relativedelta(years=1, month=target_month)
+                # Advance to next year, and clamp day to last valid day of target month
+                target_dt = target_dt + relativedelta(years=1, month=target_month, day=min(target_dt.day, 28))
+                # Use relativedelta to safely set to last day of month if needed
+                if target_dt.day < current_time.day:
+                    target_dt = target_dt + relativedelta(day=31)  # Gets last day of month
             else:
-                # Same year
-                target_dt = target_dt.replace(month=target_month)
+                # Same year, use relativedelta to handle month-end edge cases
+                try:
+                    target_dt = target_dt.replace(month=target_month)
+                except ValueError:
+                    # Day doesn't exist in target month (e.g., Jan 31 -> Feb), clamp to last day
+                    target_dt = target_dt + relativedelta(month=target_month, day=31)
 
         # Step 2: Apply day_of_month constraint if specified
         if day_of_month is not None:
@@ -244,7 +266,7 @@ class TimeMachine:
                 candidate_dt = target_dt.replace(day=day_of_month)
 
                 # If this is not in the future, advance to next month
-                if candidate_dt <= self._fake_time:
+                if candidate_dt <= current_time:
                     # Move to next month and try again
                     target_dt = target_dt + relativedelta(months=1)
                     # Handle month-end edge cases (e.g., day=31 in February)
@@ -274,7 +296,7 @@ class TimeMachine:
             # If days_ahead is 0 and we're on the target weekday already,
             # check if this would still be in the future
             if days_ahead == 0:
-                if target_dt <= self._fake_time:
+                if target_dt <= current_time:
                     # Need to advance a full week
                     days_ahead = 7
 
@@ -299,7 +321,7 @@ class TimeMachine:
 
         # Check if time constraints resulted in a time that's not in the future
         # If so, advance to the next valid occurrence at the specified time
-        if target_dt <= self._fake_time:
+        if target_dt <= current_time:
             if day is not None:
                 # Preserve the requested weekday by advancing a full week
                 target_dt = target_dt + timedelta(days=7)
@@ -368,8 +390,10 @@ class TimeMachine:
             # Home Assistant returns ISO 8601 format with timezone
             # e.g., "2026-01-21T07:30:00+00:00"
             preset_dt = datetime.fromisoformat(time_str_from_entity)
-            # Remove timezone info to work with naive datetime
-            preset_dt = preset_dt.replace(tzinfo=None)
+            # Convert to container's local timezone, then drop tzinfo to work with naive local datetime
+            if preset_dt.tzinfo is not None:
+                local_tz = datetime.now().astimezone().tzinfo
+                preset_dt = preset_dt.astimezone(local_tz).replace(tzinfo=None)
         except (ValueError, AttributeError) as e:
             raise TimeMachineError(f"Failed to parse {preset_lower} time '{time_str_from_entity}': {e}")
 
@@ -378,10 +402,11 @@ class TimeMachine:
         target_dt = preset_dt + offset_applied
 
         # Validate that we're moving forward in time
-        if target_dt <= self._fake_time:
+        current_time = self._get_current_time()
+        if target_dt <= current_time:
             raise TimeMachineError(
                 f"Cannot advance to {preset_lower}: calculated target time would not be in the future.\n"
-                f"  Current fake time: {self._fake_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"  Current fake time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"  Preset ({preset_lower}): {preset_dt.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"  Offset applied: {offset_applied}\n"
                 f"  Target time: {target_dt.strftime('%Y-%m-%d %H:%M:%S')}\n"
