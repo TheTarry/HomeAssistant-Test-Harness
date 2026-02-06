@@ -298,9 +298,14 @@ class TimeMachine:
             target_dt = target_dt.replace(second=second)
 
         # Check if time constraints resulted in a time that's not in the future
-        # If so, advance to the next day at the specified time
+        # If so, advance to the next valid occurrence at the specified time
         if target_dt <= self._fake_time:
-            target_dt = target_dt + timedelta(days=1)
+            if day is not None:
+                # Preserve the requested weekday by advancing a full week
+                target_dt = target_dt + timedelta(days=7)
+            else:
+                # No weekday constraint: just move to the next day
+                target_dt = target_dt + timedelta(days=1)
 
         # Apply time change
         time_str = target_dt.strftime("%Y-%m-%d %H:%M:%S")
