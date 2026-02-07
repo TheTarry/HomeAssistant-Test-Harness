@@ -98,13 +98,17 @@ def app_daemon(docker: DockerComposeManager) -> AppDaemon:
     return AppDaemon(base_url)
 
 
-@pytest.fixture(scope="function")  # type: ignore[untyped-decorator]
-def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) -> Generator[TimeMachine, None, None]:
+@pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
+def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) -> TimeMachine:
     """Provide time machine for integration tests.
 
-    This fixture creates a time machine that allows tests to freeze time
-    or advance time for deterministic testing of time-based automations.
-    The time is automatically reset to real time after each test (scope="function").
+    This fixture creates a time machine that allows tests to advance time forward
+    for deterministic testing of time-based automations.
+
+    **IMPORTANT**: Time can only move forward, never backward. The fixture is
+    session-scoped, meaning time persists across all tests in the session and
+    cannot be reset. Tests that depend on specific time conditions must explicitly
+    advance time to the desired state at the start of the test.
 
     Tests must explicitly request this fixture to use time manipulation.
 
@@ -112,13 +116,13 @@ def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) ->
         docker: The Docker container manager fixture.
         home_assistant: The Home Assistant client fixture.
 
-    Yields:
+    Returns:
         TimeMachine: Manager for time manipulation operations.
     """
     machine = TimeMachine(
         apply_faketime=lambda content: docker.write_container_file("homeassistant", "/shared_data/.faketime", content),
         on_time_set=lambda: home_assistant.regenerate_access_token(),
+        get_entity_state=lambda entity_id: home_assistant.get_state(entity_id),
     )
-    yield machine
-    # Teardown: reset time to real time for next test
-    machine.reset_time()
+    return machine
+    # No teardown: time cannot be reset and persists across tests in the session

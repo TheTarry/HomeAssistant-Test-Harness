@@ -21,7 +21,8 @@ This script:
 
 1. Installs all development dependencies using `uv`
 2. Sets up pre-commit hooks
-3. Runs initial validation (pre-commit checks, build, tests)
+3. Creates a `.env` file for local environment variables
+4. Runs initial validation (pre-commit checks, build, tests)
 
 **Skip initial validation:** If you want to skip the initial checks, use:
 

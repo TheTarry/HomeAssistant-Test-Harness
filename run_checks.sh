@@ -18,11 +18,14 @@ uv run python -c "import ha_integration_test_harness; print(f'✅ Successfully i
 
 echo ""
 echo "🧪 Running example tests..."
-HOME_ASSISTANT_CONFIG_ROOT="$(pwd)/examples/config"
-export HOME_ASSISTANT_CONFIG_ROOT
-APPDAEMON_CONFIG_ROOT="$(pwd)/examples/appdaemon"
-export APPDAEMON_CONFIG_ROOT
-uv run pytest examples/
+if [ -f .env ]; then
+  echo "Using .env environment file for example tests..."
+  uv run --env-file .env pytest examples/
+else
+  echo "❌ .env not found. Example tests require a configured environment."
+  echo "   Please run ./setup_dev_env.sh to generate .env before running run_checks.sh."
+  exit 1
+fi
 
 echo ""
 echo "✅ All checks passed!"

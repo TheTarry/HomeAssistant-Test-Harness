@@ -129,12 +129,10 @@ def test_entity_state(home_assistant):
 ### Time-Based Test
 
 ```python
-from datetime import datetime
-
 def test_scheduled_automation(home_assistant, time_machine):
     """Test automation that triggers at specific time."""
-    # Set time to 10:00 AM
-    time_machine.set_time(datetime(2026, 1, 21, 10, 0))
+    # Jump to next Monday at 10:00 AM
+    time_machine.jump_to_next(day="Monday", hour=10, minute=0)
 
     # Verify automation triggered
     home_assistant.assert_entity_state("light.morning", "on", timeout=5)
@@ -201,14 +199,21 @@ def test_multiple_entities(create_entity):
 Only request `time_machine` fixture in tests that need time manipulation:
 
 ```python
+from datetime import timedelta
+
 # Don't do this - time machine in every test
 def test_normal(home_assistant, time_machine):
     pass
 
 # Do this - only when needed
 def test_time_based(home_assistant, time_machine):
-    time_machine.set_time(...)
+    # Always explicitly set initial time conditions
+    time_machine.fast_forward(timedelta(days=1))
+    # ... test logic ...
 ```
+
+**Important:** The `time_machine` fixture is session-scoped, so time persists across all tests and cannot be reset. Each test using time manipulation should
+explicitly set its initial time state.
 
 ## Configuration Requirements
 

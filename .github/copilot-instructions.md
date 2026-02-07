@@ -122,6 +122,7 @@ This script:
 
 - Installs all dependencies using `uv`
 - Sets up pre-commit hooks
+- Creates a `.env` file for local environment variables
 - Runs initial validation (can skip with `--skip-checks`)
 
 ### Making Changes
@@ -183,14 +184,54 @@ Automated via GitHub Actions (`.github/workflows/release.yaml`). Copilot will no
 3. **Error messages**: Include link to GitHub usage docs for configuration errors
 4. **Documentation structure**: Keep docs in separate files, link from README
 5. **Environment variables**: Support `HOME_ASSISTANT_CONFIG_ROOT` and `APPDAEMON_CONFIG_ROOT` for flexible config paths
+6. **Time manipulation limitation**: Time can ONLY move forward, never backward. The `time_machine` fixture is
+    session-scoped and time persists across all tests. There is no way to reset time to real time or an earlier point.
+
+## Time Manipulation API
+
+### Critical Constraint
+
+**Time can only move forward, never backward.** This is a fundamental limitation of the Home Assistant containers use of monotonic clocks.
+Once time has been advanced, it cannot be reset or moved to an earlier point until the container is restarted.
+
+### Available Methods
+
+- `fast_forward(delta: timedelta)`: Advance time by relative timedelta offset
+- `jump_to_next(month=None, day=None, day_of_month=None, hour=None, minute=None, second=None)`: Jump to next occurrence of calendar constraints
+- `advance_to_preset(preset: str, offset: Optional[timedelta] = None)`: Advance to sunrise/sunset with optional offset
+
+### Usage Guidelines
+
+1. **Explicit time initialization**: Tests requiring specific time conditions must explicitly set initial state using one of the time advancement methods
+2. **Session persistence**: Time persists across all tests in the session (session-scoped fixture)
+3. **No reset available**: There is no `reset_time()` or equivalent method - time cannot go backward
+4. **Constraint order in `jump_to_next()`**: Applied in sequence: month → day_of_month → weekday → hour/minute/second
+5. **Preserve unspecified components**: In `jump_to_next()`, unspecified time components (hour/minute/second) are preserved from current fake time
+
+### Examples
+
+```python
+# Advance by relative time
+time_machine.fast_forward(timedelta(days=5, hours=2))
+
+# Jump to next Monday at 10:00 AM
+time_machine.jump_to_next(day="Monday", hour=10, minute=0)
+
+# Jump to 1st of next month, then next Friday, preserving time
+time_machine.jump_to_next(day_of_month=1, day="Friday")
+
+# Advance to 30 minutes after next sunrise
+time_machine.advance_to_preset("sunrise", timedelta(minutes=30))
+```
 
 ## Best Practices
 
-- **Minimal dependencies**: Only `requests` for runtime
+- **Minimal dependencies**: Only `requests` and `python-dateutil` for runtime
 - **Clear error messages**: Help users debug issues
 - **Atomic operations**: File writes use temp file + move pattern
 - **Environment-based configuration**: Use env vars for flexible directory paths
 - **Type safety**: Use type hints throughout
+- **Forward-only time**: Always advance time forward; document that backward time travel is not supported
 
 ## Resources
 

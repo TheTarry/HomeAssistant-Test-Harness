@@ -3,7 +3,7 @@
 import logging
 import time
 from functools import wraps
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar, Union, overload
 
 import requests
 
@@ -205,7 +205,13 @@ class HomeAssistant:
         except requests.RequestException as e:
             raise HomeAssistantClientError(f"Failed to get state for entity {entity_id} from {url}: {e}")
 
-    def assert_entity_state(self, entity_id: str, expected_state: str, timeout: int = 5) -> None:
+    @overload
+    def assert_entity_state(self, entity_id: str, expected_state: str, timeout: int = 5) -> None: ...
+
+    @overload
+    def assert_entity_state(self, entity_id: str, expected_state: Callable[[str], bool], timeout: int = 5) -> None: ...
+
+    def assert_entity_state(self, entity_id: str, expected_state: Union[str, Callable[[str], bool]], timeout: int = 5) -> None:
         """Assert that an entity is in the expected state.
 
         Polls the entity state every second until it matches the expected state
@@ -213,7 +219,8 @@ class HomeAssistant:
 
         Args:
             entity_id: The entity ID to check (e.g., "light.foobar").
-            expected_state: The expected state value (e.g., "on", "off").
+            expected_state: Either a string for exact match, or a callable that
+                takes the current state string and returns True when satisfied.
             timeout: Maximum time to wait in seconds (default: 5).
 
         Raises:
@@ -222,6 +229,7 @@ class HomeAssistant:
         """
         start_time = time.time()
         last_state = None
+        expectation_desc = "predicate function" if callable(expected_state) else f"'{expected_state}'"
 
         while True:
             state_response = self.get_state(entity_id)
@@ -232,19 +240,28 @@ class HomeAssistant:
             # Extract the actual state value from the response
             if isinstance(state_response, dict):
                 current_state = state_response.get("state")
+                if not isinstance(current_state, str):
+                    raise AssertionError(f"Entity {entity_id} has unexpected state value: {current_state}")
             else:
                 raise AssertionError(f"Unexpected state response format for entity {entity_id}: {state_response}")
 
-            # Check if state matches
-            if current_state == expected_state:
-                if last_state is not None and last_state != expected_state:
-                    logger.debug(f"Entity {entity_id} reached expected state '{expected_state}' after {time.time() - start_time:.1f}s")
+            # Check if state matches expectation
+            if callable(expected_state):
+                # Call the predicate function
+                matches = expected_state(current_state)
+            else:
+                # Exact match
+                matches = current_state == expected_state
+
+            if matches:
+                if last_state is not None and (callable(expected_state) or last_state != expected_state):
+                    logger.debug(f"Entity {entity_id} reached expected state ({expectation_desc}) after {time.time() - start_time:.1f}s")
                 return
 
             # Check timeout
             elapsed = time.time() - start_time
             if elapsed >= timeout:
-                raise AssertionError(f"Entity {entity_id} did not reach expected state '{expected_state}' within {timeout}s. " f"Current state: '{current_state}'")
+                raise AssertionError(f"Entity {entity_id} did not reach expected state ({expectation_desc}) within {timeout}s. " f"Current state: '{current_state}'")
 
             last_state = current_state
             time.sleep(1)
