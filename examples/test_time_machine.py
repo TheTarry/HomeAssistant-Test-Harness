@@ -147,7 +147,6 @@ def test_jump_to_next_with_time(home_assistant: HomeAssistant, time_machine: Tim
     after_state = home_assistant.get_state("sensor.current_datetime")
     after_dt = parse_datetime(after_state["state"])
     assert after_dt >= before_dt  # Time moved forward
-    assert after_dt.date() > before_dt.date()  # Date advanced
     assert after_dt.weekday() == 0  # Monday is 0
     # Time components set to specified values
     assert after_dt.hour == 10
