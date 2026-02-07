@@ -201,7 +201,10 @@ def test_jump_to_next_constraint_sequence(home_assistant: HomeAssistant, time_ma
     # Verify all constraints applied
     after_state = home_assistant.get_state("sensor.current_datetime")
     after_dt = parse_datetime(after_state["state"])
-    assert after_dt.month == before_month + 1  # Next month
+    expected_month = 1 if before_month == 12 else before_month + 1
+    expected_year = before_dt.year + 1 if before_month == 12 else before_dt.year
+    assert after_dt.year == expected_year  # Year should advance when wrapping from December to January
+    assert after_dt.month == expected_month  # Next month with wrap-around
     assert after_dt.weekday() == 0  # Monday
     assert after_dt.hour == 10
     assert after_dt >= before_dt  # Time moved forward
