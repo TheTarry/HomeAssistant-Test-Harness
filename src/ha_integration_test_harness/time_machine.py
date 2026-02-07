@@ -397,10 +397,9 @@ class TimeMachine:
             # Home Assistant returns ISO 8601 format with timezone
             # e.g., "2026-01-21T07:30:00+00:00"
             preset_dt = datetime.fromisoformat(time_str_from_entity)
-            # Convert to container's local timezone, then drop tzinfo to work with naive local datetime
-            if preset_dt.tzinfo is not None:
-                local_tz = datetime.now().astimezone().tzinfo
-                preset_dt = preset_dt.astimezone(local_tz).replace(tzinfo=None)
+            # Containers run in UTC, so strip timezone info to get naive UTC datetime
+            # This matches the libfaketime expectation of naive timestamps in container time (UTC)
+            preset_dt = preset_dt.replace(tzinfo=None)
         except (ValueError, AttributeError) as e:
             raise TimeMachineError(f"Failed to parse {preset_lower} time '{time_str_from_entity}': {e}")
 
