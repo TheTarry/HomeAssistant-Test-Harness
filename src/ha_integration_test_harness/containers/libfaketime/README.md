@@ -35,7 +35,7 @@ The installation process includes security measures to prevent supply-chain atta
 
 Time is controlled by writing to `/shared_data/.faketime` file in the containers. Format:
 
-- Absolute time: `YYYY-MM-DD HH:MM:SS` (e.g., `2026-01-05 07:30:00`)
+- Leading time: `@YYYY-MM-DD HH:MM:SS` (e.g., `@2026-01-05 07:30:00`)
 - Relative offset: `+Xs` or `-Xs` (e.g., `+60s` for 60 seconds forward)
 
 See `integration_tests/harness/time_machine.py` for the Python API.
