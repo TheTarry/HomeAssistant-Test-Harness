@@ -22,9 +22,9 @@ if [ -f .env ]; then
   echo "Using .env environment file for example tests..."
   uv run --env-file .env pytest examples/
 else
-  echo "⚠️ .env not found. Running example tests without an environment file."
-  echo "   If you encounter configuration issues, run ./setup_dev_env.sh to generate .env."
-  uv run pytest examples/
+  echo "❌ .env not found. Example tests require a configured environment."
+  echo "   Please run ./setup_dev_env.sh to generate .env before running run_checks.sh."
+  exit 1
 fi
 
 echo ""
