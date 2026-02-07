@@ -6,13 +6,16 @@ from ha_integration_test_harness import HomeAssistant, TimeMachine
 
 
 def parse_datetime(iso_string: str) -> datetime:
-    """Parse ISO 8601 datetime string and strip timezone.
+    """Parse ISO 8601 datetime string and strip timezone to get naive UTC datetime.
+
+    This treats all timestamps as UTC (matching container timezone) without conversion,
+    consistent with TimeMachine's behavior.
 
     Args:
         iso_string: ISO 8601 formatted datetime string (e.g., "2026-02-02T15:30:00+00:00").
 
     Returns:
-        Naive datetime object with timezone stripped for comparison.
+        Naive datetime object in UTC with timezone info stripped for comparison.
     """
     return datetime.fromisoformat(iso_string).replace(tzinfo=None)
 
