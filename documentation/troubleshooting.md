@@ -173,7 +173,7 @@ Time cannot be moved backward or reset to real time. The `time_machine` fixture 
        # Jump to the nearest time which is relevant for your test
        # Avoid jumping ahead by months/weeks unless absolutely necessary
        time_machine.jump_to_next(day="Monday", hour=7)
-       # ... test morning morning automation ...
+       # ... test morning automation ...
    ```
 
 ### Sunrise/Sunset Preset Fails
