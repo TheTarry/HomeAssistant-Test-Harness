@@ -160,8 +160,12 @@ def test_jump_to_next_hour_moves_to_next_day_when_already_past_hour_specified(ho
     before_state = home_assistant.get_state("sensor.current_datetime")
     before_dt = parse_datetime(before_state["state"])
 
-    # Jump to next hour that is 1 hour before current time
-    earlier_hour = (before_dt.hour - 1) % 24
+    # Jump to next hour that is guaranteed to be in the past relative to current time
+    if before_dt.hour > 0:
+        earlier_hour = before_dt.hour - 1
+    else:
+        # At or near midnight: use 00:00, which is earlier in the same day than almost any realistic test time
+        earlier_hour = 0
     time_machine.jump_to_next(hour=earlier_hour)
 
     # Verify we rollover to the next day at the specified hour
