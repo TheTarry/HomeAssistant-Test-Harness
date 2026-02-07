@@ -241,8 +241,8 @@ class TimeMachine:
             target_month = MONTH_NAMES[month_lower]
             original_day = target_dt.day
 
-            # If target month is same as current, we're already there
-            # If target month is earlier in year, advance to next year
+            # For "next occurrence" semantics:
+            # - If target month is the same as or earlier than the current month, advance to next year
             if target_month <= target_dt.month:
                 # Advance to next year and safely set month
                 # relativedelta with day=31 sets to last valid day of the month
