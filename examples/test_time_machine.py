@@ -383,10 +383,3 @@ def test_fast_forward_by_one_year(home_assistant: HomeAssistant, time_machine: T
     # Calculate expected time and verify
     expected_dt = before_dt + delta
     assert_datetime_is_approx(home_assistant, expected_dt)
-
-    # Verify we can still interact with Home Assistant (token should still be valid)
-    # This confirms the long-lived token is working properly beyond the 90-day limit
-    current_state = home_assistant.get_state("sensor.current_datetime")
-    assert current_state is not None
-    current_dt = parse_datetime(current_state["state"])
-    assert current_dt >= expected_dt

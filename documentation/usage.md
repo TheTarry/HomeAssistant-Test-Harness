@@ -82,8 +82,8 @@ The `docker-compose.yaml` orchestrates container startup with dependencies and h
   - Copies repository configuration into `/config`
   - Starts Home Assistant server
   - Completes onboarding (creates test user)
-  - Generates long-lived access token and refresh token
-  - Writes tokens to shared volume (`/shared_data/.ha_token` & `/shared_data/.ha_refresh_token`)
+  - Generates long-lived access token
+  - Writes token to shared volume (`/shared_data/.ha_token`)
   - Creates ready flag (`/shared_data/.homeassistant_ready`)
 
 2. **AppDaemon starts** (after HA is healthy) (`containers/appdaemon/entrypoint.sh`):
