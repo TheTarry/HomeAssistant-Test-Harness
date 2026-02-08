@@ -22,8 +22,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: 🔑 Authenticate as Release Manager
+        id: release-manager-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_MANAGER_APP_ID }}
+          private-key: ${{ secrets.RELEASE_MANAGER_PRIVATE_KEY }}
+
       - name: ⤵️ Check out code
         uses: actions/checkout@v6.0.2
+        with:
+          token: ${{ steps.release-manager-token.outputs.token }}
 
       - name: � Set up Python and uv
         uses: astral-sh/setup-uv@v7
@@ -31,8 +40,6 @@ jobs:
           enable-cache: true
 
       - name: 🔍 Check if release already exists
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |-
           VERSION="${{ inputs.version }}"
           TAG="v$VERSION"
@@ -44,16 +51,7 @@ jobs:
 
           echo "Release $TAG does not exist, proceeding with creation"
 
-      - name: 🔑 Authenticate as Release Manager
-        id: release-manager-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.RELEASE_MANAGER_APP_ID }}
-          private-key: ${{ secrets.RELEASE_MANAGER_PRIVATE_KEY }}
-
       - name: 📝 Update version in all files
-        env:
-          GITHUB_TOKEN: ${{ steps.release-manager-token.outputs.token }}
         run: |-
           VERSION="${{ inputs.version }}"
           echo "Updating version to $VERSION in pyproject.toml and uv.lock"
