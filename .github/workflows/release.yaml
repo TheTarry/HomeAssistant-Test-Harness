@@ -44,7 +44,16 @@ jobs:
 
           echo "Release $TAG does not exist, proceeding with creation"
 
+      - name: 🔑 Authenticate as Release Manager
+        id: release-manager-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_MANAGER_APP_ID }}
+          private-key: ${{ secrets.RELEASE_MANAGER_PRIVATE_KEY }}
+
       - name: 📝 Update version in all files
+        env:
+          GITHUB_TOKEN: ${{ steps.release-manager-token.outputs.token }}
         run: |-
           VERSION="${{ inputs.version }}"
           echo "Updating version to $VERSION in pyproject.toml and uv.lock"
@@ -66,13 +75,6 @@ jobs:
             git commit -m "Bump version to $VERSION"
             git push
           fi
-
-      - name: 🔑 Authenticate as Release Manager
-        id: release-manager-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.RELEASE_MANAGER_APP_ID }}
-          private-key: ${{ secrets.RELEASE_MANAGER_PRIVATE_KEY }}
 
       - name: 🚀 Create GitHub Release
         env:
