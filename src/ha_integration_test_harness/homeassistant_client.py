@@ -15,8 +15,7 @@ class HomeAssistant:
     """Client for interacting with Home Assistant API.
 
     Provides methods for managing entity states using a long-lived access token
-    for authentication. The client automatically retries requests with a 401 error
-    in case the token is invalid or expired.
+    for authentication.
     """
 
     def __init__(self, base_url: str, access_token: str) -> None:
