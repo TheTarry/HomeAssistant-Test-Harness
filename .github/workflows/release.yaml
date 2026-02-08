@@ -67,9 +67,16 @@ jobs:
             git push
           fi
 
-      - name: Create GitHub Release
+      - name: 🔑 Authenticate as Release Manager
+        id: release-manager-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_MANAGER_APP_ID }}
+          private-key: ${{ secrets.RELEASE_MANAGER_PRIVATE_KEY }}
+
+      - name: 🚀 Create GitHub Release
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ steps.release-manager-token.outputs.token }}
         run: |-
           VERSION="${{ inputs.version }}"
           TAG="v$VERSION"
