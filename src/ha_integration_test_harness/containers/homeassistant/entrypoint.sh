@@ -66,22 +66,12 @@ TOKEN_RESPONSE=$(curl -s -X POST http://localhost:8123/auth/token \
   -d "grant_type=authorization_code&code=${AUTH_CODE}&client_id=http://localhost")
 
 ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-REFRESH_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"refresh_token":"[^"]*"' | cut -d'"' -f4)
 
 if [ -z "$ACCESS_TOKEN" ]; then
   echo "❌ Failed to get access token"
   echo "Response: $TOKEN_RESPONSE"
   exit 1
 fi
-
-if [ -z "$REFRESH_TOKEN" ]; then
-  echo "❌ Failed to get refresh token"
-  echo "Response: $TOKEN_RESPONSE"
-  exit 1
-fi
-
-# Save refresh token for test harness token regeneration
-echo "$REFRESH_TOKEN" > /shared_data/.ha_refresh_token
 
 # Generate a long-lived access token for integration tests
 # This prevents token expiration when tests manipulate time

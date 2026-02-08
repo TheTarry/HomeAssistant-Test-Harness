@@ -368,3 +368,18 @@ def test_advance_to_after_sunset(home_assistant: HomeAssistant, time_machine: Ti
 
     # Verify sun is below horizon (30 minutes after sunset = nighttime)
     home_assistant.assert_entity_state("sun.sun", "below_horizon")
+
+
+def test_fast_forward_by_one_year(home_assistant: HomeAssistant, time_machine: TimeMachine) -> None:
+    """Test advancing time by one year to verify long-lived token works beyond 90-day refresh token limit."""
+    # Query current time before advancement
+    before_state = home_assistant.get_state("sensor.current_datetime")
+    before_dt = parse_datetime(before_state["state"])
+
+    # Fast forward by 1 year
+    delta = timedelta(days=365)
+    time_machine.fast_forward(delta)
+
+    # Calculate expected time and verify
+    expected_dt = before_dt + delta
+    assert_datetime_is_approx(home_assistant, expected_dt)

@@ -66,8 +66,8 @@ def home_assistant(docker: DockerComposeManager) -> HomeAssistant:
     """Provide Home Assistant API client for integration tests.
 
     This fixture creates a Home Assistant client configured with the dynamically
-    assigned URL and refresh token from the Docker container. The client is shared
-    across all tests in the session (scope="session").
+    assigned URL and long-lived access token from the Docker container. The client
+    is shared across all tests in the session (scope="session").
 
     Args:
         docker: The Docker container manager fixture.
@@ -76,8 +76,8 @@ def home_assistant(docker: DockerComposeManager) -> HomeAssistant:
         HomeAssistant: Client for Home Assistant API interactions.
     """
     base_url = docker.get_home_assistant_url()
-    refresh_token = docker.read_container_file("homeassistant", "/shared_data/.ha_refresh_token")
-    return HomeAssistant(base_url, refresh_token)
+    access_token = docker.read_container_file("homeassistant", "/shared_data/.ha_token")
+    return HomeAssistant(base_url, access_token)
 
 
 @pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
@@ -121,7 +121,7 @@ def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) ->
     """
     machine = TimeMachine(
         apply_faketime=lambda content: docker.write_container_file("homeassistant", "/shared_data/.faketime", content),
-        on_time_set=lambda: home_assistant.regenerate_access_token(),
+        on_time_set=None,  # No token regeneration needed with long-lived token
         get_entity_state=lambda entity_id: home_assistant.get_state(entity_id),
     )
     return machine
