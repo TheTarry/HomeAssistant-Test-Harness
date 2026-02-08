@@ -80,9 +80,6 @@ if [ -z "$REFRESH_TOKEN" ]; then
   exit 1
 fi
 
-# Save refresh token for test harness token regeneration
-echo "$REFRESH_TOKEN" > /shared_data/.ha_refresh_token
-
 # Generate a long-lived access token for integration tests
 # This prevents token expiration when tests manipulate time
 bash /generate_long_lived_token.sh "$ACCESS_TOKEN"
