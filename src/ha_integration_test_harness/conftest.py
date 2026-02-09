@@ -129,20 +129,26 @@ def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) ->
 
 
 @pytest.fixture(autouse=True)  # type: ignore[untyped-decorator]
-def _cleanup_test_entities(home_assistant: HomeAssistant) -> Generator[None, None, None]:
+def _cleanup_test_entities(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     """Auto-cleanup fixture that removes test entities after each test.
 
     This fixture automatically runs after every test function (autouse=True)
     and calls clean_up_test_entities() to remove any entities created via
     given_an_entity(). Tests don't need to explicitly request this fixture.
 
+    Only activates cleanup if the test actually used the home_assistant fixture,
+    avoiding unnecessary Docker container startup for tests that don't need it.
+
     Args:
-        home_assistant: The Home Assistant client fixture.
+        request: The pytest request object for conditional fixture access.
 
     Yields:
         None: This fixture doesn't provide any value to tests.
     """
     # Setup: nothing to do before the test
     yield
-    # Teardown: clean up entities after the test
-    home_assistant.clean_up_test_entities()
+
+    # Teardown: only clean up if the test used home_assistant fixture
+    if "home_assistant" in request.fixturenames:
+        home_assistant: HomeAssistant = request.getfixturevalue("home_assistant")
+        home_assistant.clean_up_test_entities()

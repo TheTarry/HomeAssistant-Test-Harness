@@ -158,7 +158,7 @@ class HomeAssistant:
         except requests.RequestException as e:
             raise HomeAssistantClientError(f"Failed to remove entity {entity_id} from {url}: {e}")
 
-    def given_an_entity(self, entity_id: str, state: str, attributes: Optional[dict[str, str]] = None) -> None:
+    def given_an_entity(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
         """Create an entity for testing purposes with automatic cleanup.
 
         This method creates a test entity using set_state() and automatically tracks it
@@ -180,20 +180,26 @@ class HomeAssistant:
         """Remove all entities created via given_an_entity().
 
         This method is called automatically after each test function completes.
-        It removes all tracked test entities and clears the tracking set.
+        It removes all tracked test entities. Successfully removed entities are
+        cleared from tracking immediately, while failed removals remain tracked
+        for potential retry.
 
         Raises:
             HomeAssistantClientError: If any entity removal fails.
         """
         errors = []
-        for entity_id in self._created_entities:
+        successfully_removed = []
+
+        for entity_id in list(self._created_entities):
             try:
                 self.remove_entity(entity_id)
+                successfully_removed.append(entity_id)
             except HomeAssistantClientError as e:
                 errors.append(str(e))
 
-        # Clear the set regardless of errors
-        self._created_entities.clear()
+        # Remove only successfully deleted entities from tracking
+        for entity_id in successfully_removed:
+            self._created_entities.discard(entity_id)
 
         # Raise if there were any errors
         if errors:
