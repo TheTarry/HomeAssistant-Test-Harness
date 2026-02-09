@@ -126,3 +126,23 @@ def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) ->
     )
     return machine
     # No teardown: time cannot be reset and persists across tests in the session
+
+
+@pytest.fixture(autouse=True)  # type: ignore[untyped-decorator]
+def _cleanup_test_entities(home_assistant: HomeAssistant) -> Generator[None, None, None]:
+    """Auto-cleanup fixture that removes test entities after each test.
+
+    This fixture automatically runs after every test function (autouse=True)
+    and calls clean_up_test_entities() to remove any entities created via
+    given_an_entity(). Tests don't need to explicitly request this fixture.
+
+    Args:
+        home_assistant: The Home Assistant client fixture.
+
+    Yields:
+        None: This fixture doesn't provide any value to tests.
+    """
+    # Setup: nothing to do before the test
+    yield
+    # Teardown: clean up entities after the test
+    home_assistant.clean_up_test_entities()
