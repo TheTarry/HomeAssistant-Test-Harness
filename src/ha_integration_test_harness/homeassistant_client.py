@@ -29,7 +29,7 @@ class HomeAssistant:
         self._access_token = access_token
         self._created_entities: set[str] = set()
 
-    def set_state(self, entity_id: str, state: str, attributes: Optional[dict[str, str]] = None) -> None:
+    def set_state(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
         """Set the state and/or attributes of a Home Assistant entity.
 
         Args:
