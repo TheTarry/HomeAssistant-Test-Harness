@@ -158,12 +158,12 @@ class HomeAssistant:
         except requests.RequestException as e:
             raise HomeAssistantClientError(f"Failed to remove entity {entity_id} from {url}: {e}")
 
-    def given_an_entity(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
+    def given_an_entity(self, entity_id: str, state: str, attributes: Optional[dict[str, str]] = None) -> None:
         """Create an entity for testing purposes with automatic cleanup.
 
         This method creates a test entity using set_state() and automatically tracks it
         for cleanup at the end of the test function. If called multiple times with the
-        same entity_id, only the most recent call is tracked.
+        same entity_id, it is tracked only once.
 
         Args:
             entity_id: The entity ID to create (e.g., 'light.living_room').

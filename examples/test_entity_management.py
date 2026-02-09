@@ -40,12 +40,12 @@ def test_entity_update_tracked_correctly(home_assistant: HomeAssistant) -> None:
     home_assistant.given_an_entity("input_boolean.test_update", "on")
 
     # Update the same entity
-    home_assistant.given_an_entity("input_boolean.test_update", "off", attributes={"updated": True})
+    home_assistant.given_an_entity("input_boolean.test_update", "off", attributes={"updated": "true"})
 
     # Verify the entity has the updated state
     state = home_assistant.get_state("input_boolean.test_update")
     assert state["state"] == "off"
-    assert state["attributes"]["updated"] is True
+    assert state["attributes"]["updated"] == "true"
 
     # The entity should only be tracked once and cleaned up once
 
