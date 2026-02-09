@@ -27,8 +27,9 @@ class HomeAssistant:
         """
         self._base_url = base_url
         self._access_token = access_token
+        self._created_entities: set[str] = set()
 
-    def set_state(self, entity_id: str, state: str, attributes: Optional[dict[str, str]] = None) -> None:
+    def set_state(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
         """Set the state and/or attributes of a Home Assistant entity.
 
         Args:
@@ -156,3 +157,50 @@ class HomeAssistant:
                 response.raise_for_status()
         except requests.RequestException as e:
             raise HomeAssistantClientError(f"Failed to remove entity {entity_id} from {url}: {e}")
+
+    def given_an_entity(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
+        """Create an entity for testing purposes with automatic cleanup.
+
+        This method creates a test entity using set_state() and automatically tracks it
+        for cleanup at the end of the test function. If called multiple times with the
+        same entity_id, it is tracked only once.
+
+        Args:
+            entity_id: The entity ID to create (e.g., 'light.living_room').
+            state: The state value to set for the entity.
+            attributes: Optional dictionary of attributes to set for the entity.
+
+        Raises:
+            HomeAssistantClientError: If the request fails due to network issues or API errors.
+        """
+        self.set_state(entity_id, state, attributes)
+        self._created_entities.add(entity_id)
+
+    def clean_up_test_entities(self) -> None:
+        """Remove all entities created via given_an_entity().
+
+        This method is called automatically after each test function completes.
+        It removes all tracked test entities. Successfully removed entities are
+        cleared from tracking immediately, while failed removals remain tracked
+        for potential retry.
+
+        Raises:
+            HomeAssistantClientError: If any entity removal fails.
+        """
+        errors = []
+        successfully_removed = []
+
+        for entity_id in list(self._created_entities):
+            try:
+                self.remove_entity(entity_id)
+                successfully_removed.append(entity_id)
+            except HomeAssistantClientError as e:
+                errors.append(str(e))
+
+        # Remove only successfully deleted entities from tracking
+        for entity_id in successfully_removed:
+            self._created_entities.discard(entity_id)
+
+        # Raise if there were any errors
+        if errors:
+            raise HomeAssistantClientError(f"Failed to clean up {len(errors)} test entities:\n" + "\n".join(errors))

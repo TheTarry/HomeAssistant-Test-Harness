@@ -116,14 +116,13 @@ This design allows multiple developers or CI jobs to run tests simultaneously wi
 
 ```python
 def test_entity_state(home_assistant):
-    """Test setting and reading entity states."""
-    home_assistant.set_state("input_boolean.test", "on")
+    """Test setting and reading entity states with automatic cleanup."""
+    home_assistant.given_an_entity("input_boolean.test", "on")
 
     state = home_assistant.get_state("input_boolean.test")
     assert state["state"] == "on"
 
-    # Cleanup
-    home_assistant.remove_entity("input_boolean.test")
+    # Entity is automatically cleaned up after test
 ```
 
 ### Time-Based Test
@@ -153,28 +152,67 @@ def test_automation_with_delay(home_assistant):
 
 ### Cleanup
 
-Always clean up test entities to prevent state pollution:
+The harness provides **automatic cleanup** for test entities via `given_an_entity()`:
 
 ```python
-def test_with_cleanup(home_assistant):
+def test_with_auto_cleanup(home_assistant):
+    """Entities created with given_an_entity are automatically cleaned up."""
+    home_assistant.given_an_entity("switch.test", "on")
+
+    # ... test logic ...
+
+    # No cleanup needed - handled automatically!
+```
+
+**Manual cleanup** is still supported for cases where you need explicit control:
+
+```python
+def test_with_manual_cleanup(home_assistant):
+    """Manual cleanup when needed."""
     entity_id = "switch.test"
     home_assistant.set_state(entity_id, "on")
 
     # ... test logic ...
 
-    # Cleanup
+    # Manual cleanup
     home_assistant.remove_entity(entity_id)
 ```
 
+**When to use each approach:**
+
+- **Use `given_an_entity()`** (automatic): For most test entities that should be cleaned up after the test
+- **Use `set_state()` + `remove_entity()`** (manual): When you need explicit control over cleanup timing or want to test entity removal behavior
+
 ### Factory Fixtures
 
-Use factory patterns for creating multiple test entities:
+Use factory patterns for creating multiple test entities with automatic cleanup:
 
 ```python
 import pytest
 
 @pytest.fixture
 def create_entity(home_assistant):
+    """Factory fixture with automatic cleanup via given_an_entity."""
+    def _create(entity_id, state, **attributes):
+        home_assistant.given_an_entity(entity_id, state, attributes)
+        return entity_id
+
+    return _create
+
+def test_multiple_entities(create_entity):
+    light1 = create_entity("light.test1", "on", brightness=255)
+    light2 = create_entity("light.test2", "off")
+    # Entities automatically cleaned up after test
+```
+
+**Alternative with manual tracking** (for advanced use cases):
+
+```python
+import pytest
+
+@pytest.fixture
+def create_entity_manual(home_assistant):
+    """Factory fixture with manual cleanup tracking."""
     created = []
 
     def _create(entity_id, state):
@@ -184,14 +222,14 @@ def create_entity(home_assistant):
 
     yield _create
 
-    # Automatic cleanup
+    # Manual cleanup
     for entity_id in created:
         home_assistant.remove_entity(entity_id)
 
-def test_multiple_entities(create_entity):
-    light1 = create_entity("light.test1", "on")
-    light2 = create_entity("light.test2", "off")
-    # Entities automatically cleaned up after test
+def test_multiple_entities(create_entity_manual):
+    light1 = create_entity_manual("light.test1", "on")
+    light2 = create_entity_manual("light.test2", "off")
+    # Entities cleaned up by fixture teardown
 ```
 
 ### Time Machine Isolation

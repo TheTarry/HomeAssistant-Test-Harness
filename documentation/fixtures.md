@@ -38,6 +38,8 @@ home_assistant.set_state(entity_id: str, state: str, attributes: dict = None) ->
 home_assistant.get_state(entity_id: str) -> dict
 home_assistant.assert_entity_state(entity_id: str, expected_state: str, timeout: int = 10) -> None
 home_assistant.remove_entity(entity_id: str) -> None
+home_assistant.given_an_entity(entity_id: str, state: str, attributes: dict = None) -> None
+home_assistant.clean_up_test_entities() -> None
 home_assistant.regenerate_access_token() -> None
 ```
 
@@ -45,8 +47,8 @@ home_assistant.regenerate_access_token() -> None
 
 ```python
 def test_home_assistant(home_assistant):
-    # Set entity state
-    home_assistant.set_state("switch.test", "on")
+    # Create entity with automatic cleanup
+    home_assistant.given_an_entity("switch.test", "on")
 
     # Get entity state
     state = home_assistant.get_state("switch.test")
@@ -55,7 +57,21 @@ def test_home_assistant(home_assistant):
     # Poll until condition is met (with timeout)
     home_assistant.assert_entity_state("timer.test", "idle", timeout=30)
 
-    # Clean up
+    # Entity is automatically cleaned up after test
+```
+
+#### Alternative: Manual cleanup
+
+```python
+def test_manual_cleanup(home_assistant):
+    # Set entity state (manual cleanup required)
+    home_assistant.set_state("switch.test", "on")
+
+    # Get entity state
+    state = home_assistant.get_state("switch.test")
+    assert state["state"] == "on"
+
+    # Manual cleanup
     home_assistant.remove_entity("switch.test")
 ```
 
@@ -81,7 +97,36 @@ Polls entity state until it matches expected value or timeout expires. Raises `A
 
 #### `remove_entity(entity_id)`
 
-Deletes an entity from Home Assistant. Use for test cleanup.
+Deletes an entity from Home Assistant. Use for manual test cleanup.
+
+#### `given_an_entity(entity_id, state, attributes=None)`
+
+Creates an entity for testing with **automatic cleanup**. The entity is tracked and automatically removed after the test function completes.
+
+- **entity_id**: Entity ID (e.g., `"switch.test"`)
+- **state**: State value (e.g., `"on"`, `"off"`, `"20.5"`)
+- **attributes**: Optional dictionary of entity attributes
+
+If called multiple times with the same `entity_id`, the entity is tracked only once (no duplicates).
+
+**Example:**
+
+```python
+def test_automation(home_assistant):
+    # Create entity with automatic cleanup
+    home_assistant.given_an_entity("sensor.test", "42", {"unit_of_measurement": "°C"})
+
+    # Test logic here
+    assert home_assistant.get_state("sensor.test")["state"] == "42"
+
+    # No cleanup needed - handled automatically!
+```
+
+#### `clean_up_test_entities()`
+
+Removes all entities created via `given_an_entity()`. This method is called automatically by the test harness after each test function, so you typically don't need to call it manually.
+
+If cleanup fails for some entities, all tracked entities are still removed from tracking, and errors are reported collectively.
 
 #### `regenerate_access_token()`
 

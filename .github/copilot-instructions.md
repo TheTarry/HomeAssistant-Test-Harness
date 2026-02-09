@@ -18,7 +18,7 @@ This is a **Python package** that:
 - **__init__.py**: Public API exports and version
 - **conftest.py**: Pytest plugin that registers fixtures
 - **docker_manager.py**: Docker Compose orchestration and container lifecycle
-- **homeassistant_client.py**: Home Assistant API client with auto-retry
+- **homeassistant_client.py**: Home Assistant API client with auto-retry and automatic entity cleanup
 - **appdaemon_client.py**: AppDaemon API client (basic)
 - **time_machine.py**: Time manipulation via libfaketime
 - **exceptions.py**: Exception hierarchy
@@ -78,6 +78,16 @@ ha_integration_test_harness = "ha_integration_test_harness.conftest"
 ```
 
 This makes fixtures (`docker`, `home_assistant`, `app_daemon`, `time_machine`) automatically available to tests.
+
+### Automatic Entity Cleanup
+
+The `home_assistant` fixture provides automatic cleanup for test entities:
+
+- **`given_an_entity(entity_id, state, attributes=None)`**: Creates an entity and tracks it for automatic cleanup
+- **`clean_up_test_entities()`**: Removes all tracked entities (called automatically after each test)
+- **Auto-use fixture `_cleanup_test_entities`**: Function-scoped fixture that automatically cleans up entities after each test
+
+Tests can use `given_an_entity()` instead of `set_state()` to get automatic cleanup, eliminating the need for manual `remove_entity()` calls.
 
 ### Container Lifecycle
 
