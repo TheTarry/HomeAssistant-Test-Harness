@@ -35,6 +35,16 @@ done
 
 if [ $attempt -eq $max_attempts ]; then
   echo "❌ Home Assistant failed to start within 60 seconds"
+  echo "📋 Container diagnostics:"
+  if pgrep hass >/dev/null 2>&1; then
+    echo "   HA process: running (PID: $(pgrep hass))"
+  else
+    echo "   HA process: not running"
+  fi
+  if [ -f /config/home-assistant.log ]; then
+    echo "   Last 20 lines of HA log:"
+    tail -n 20 /config/home-assistant.log
+  fi
   exit 1
 fi
 
