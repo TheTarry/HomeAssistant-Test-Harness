@@ -33,17 +33,17 @@ fi
 echo "✅ libfaketime installed successfully"
 echo "   Library path: ${LIBFAKETIME_PATH}"
 
+# Initialize the timestamp file with +0 (use real time with no offset).
+# The test harness will update this file whenever it manipulates the simulated time.
+mkdir -p /shared_data
+printf "+0" > /shared_data/.faketime.tmp
+mv /shared_data/.faketime.tmp /shared_data/.faketime
+
 # Export environment variables to "activate" libfaketime
 export FAKETIME_TIMESTAMP_FILE=/shared_data/.faketime
 export FAKETIME_NO_CACHE=1
 
 # Preload libfaketime for all processes spawned from this point onward
 export LD_PRELOAD="${LIBFAKETIME_PATH}"
-
-# Initialize the timestamp file with +0 (use real time with no offset).
-# The test harness will update this file whenever it manipulates the simulated time.
-mkdir -p /shared_data
-printf "+0" > /shared_data/.faketime.tmp
-mv /shared_data/.faketime.tmp /shared_data/.faketime
 
 echo "✅ libfaketime configured (time control via ${FAKETIME_TIMESTAMP_FILE})"
