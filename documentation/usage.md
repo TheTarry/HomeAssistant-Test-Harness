@@ -15,13 +15,28 @@ See [Installation Guide](installation.md) for details.
 When you run tests, the harness:
 
 1. **Checks environment variables**: Looks for `HOME_ASSISTANT_CONFIG_ROOT` (Home Assistant) and `APPDAEMON_CONFIG_ROOT` (AppDaemon)
-2. **Falls back to current directory**: If environment variables are not set, uses current working directory
+2. **Falls back to subdirectories**: If environment variables are not set, looks for `home_assistant/` and `appdaemon/` subdirectories in the current working directory
 3. **Validates configuration**:
    - Checks that `configuration.yaml` exists in the Home Assistant root (raises error if missing)
    - Checks that `apps/apps.yaml` exists in the AppDaemon root (logs warning if missing)
 4. **Mounts directories**: Mounts the directories as `/config` in the Home Assistant container and `/conf/apps` in the AppDaemon container
 
-**Note:** You can run tests from any directory by setting the environment variables:
+**Note:** You can run tests from any directory by using either:
+
+**Option 1 - Use default directory structure** (recommended):
+
+```text
+my-project/
+├── home_assistant/          # Home Assistant configuration
+│   └── configuration.yaml
+├── appdaemon/              # AppDaemon configuration
+│   └── apps/
+│       └── apps.yaml
+└── tests/                  # Your test files
+    └── test_integration.py
+```
+
+**Option 2 - Set environment variables explicitly**:
 
 ```bash
 export HOME_ASSISTANT_CONFIG_ROOT=/path/to/homeassistant/config
@@ -29,7 +44,7 @@ export APPDAEMON_CONFIG_ROOT=/path/to/appdaemon/config
 pytest
 ```
 
-If not set, the harness will use the current working directory for both.
+If neither environment variables are set nor the default subdirectories exist, configuration validation will fail.
 
 ### Container Lifecycle
 

@@ -26,7 +26,7 @@ else
     # On Linux/macOS, use the standard absolute path
     ROOT_PATH="$(pwd)"
 fi
-echo "HOME_ASSISTANT_CONFIG_ROOT=\"$ROOT_PATH/examples/config\"" > .env
+echo "HOME_ASSISTANT_CONFIG_ROOT=\"$ROOT_PATH/examples/home_assistant\"" > .env
 echo "APPDAEMON_CONFIG_ROOT=\"$ROOT_PATH/examples/appdaemon\"" >> .env
 
 echo ""
