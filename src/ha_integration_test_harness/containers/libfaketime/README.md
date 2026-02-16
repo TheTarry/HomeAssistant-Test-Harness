@@ -38,4 +38,4 @@ Time is controlled by writing to `/shared_data/.faketime` file in the containers
 - Absolute time (prefixed with @): `@YYYY-MM-DD HH:MM:SS` (e.g., `@2026-01-05 07:30:00`)
 - Relative offset: `+Xs` or `-Xs` (e.g., `+60s` for 60 seconds forward)
 
-See `integration_tests/harness/time_machine.py` for the Python API.
+See `src/ha_integration_test_harness/time_machine.py` for the Python API.
