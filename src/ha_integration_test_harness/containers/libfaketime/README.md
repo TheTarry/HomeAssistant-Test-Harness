@@ -16,8 +16,8 @@ The `install_libfaketime.sh` script in this directory performs these steps:
 
 1. Detects the package manager (apk for Alpine, apt-get for Debian/Ubuntu)
 2. Installs libfaketime from official distribution packages
-  - Alpine: `apk add libfaketime` (v0.9.12)
-  - Debian/Ubuntu: `apt-get install libfaketime` (v0.9.10)
+  - Alpine: `apk add libfaketime` (version from current Alpine repositories)
+  - Debian/Ubuntu: `apt-get install libfaketime` (version from current Debian/Ubuntu repositories)
 3. Locates the installed library path (architecture-specific)
 4. Configures environment variables for file-based time control
 
