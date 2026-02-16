@@ -12,7 +12,12 @@ if command -v apk > /dev/null 2>&1; then
     echo "📦 Installing libfaketime on Alpine..."
     apk add --no-cache libfaketime
     # Use multi-threaded variant (MT) - essential for Home Assistant's multi-threaded environment
-    LIBFAKETIME_PATH="/usr/lib/faketime/libfaketimeMT.so.1"
+    # Alpine typically installs to /usr/lib/faketime/libfaketimeMT.so.1, but locate dynamically
+    LIBFAKETIME_PATH=$(find /usr/lib -name "libfaketimeMT.so.1" 2>/dev/null | head -n 1)
+    if [ -z "$LIBFAKETIME_PATH" ]; then
+        echo "❌ libfaketime library not found after installation on Alpine"
+        exit 1
+    fi
 elif command -v apt-get > /dev/null 2>&1; then
     echo "📦 Installing libfaketime on Debian/Ubuntu..."
     apt-get update -qq
