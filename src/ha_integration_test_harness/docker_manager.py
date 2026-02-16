@@ -98,8 +98,8 @@ class DockerComposeManager:
         if not config_file.exists():
             raise DockerError(
                 f"configuration.yaml not found at {config_file}. "
-                "Tests must be run from a Home Assistant configuration directory. "
-                "Set HOME_ASSISTANT_CONFIG_ROOT environment variable to specify the location. "
+                "Tests must be run from a directory containing a 'home_assistant' subdirectory with your Home Assistant configuration, "
+                "or set HOME_ASSISTANT_CONFIG_ROOT environment variable to specify the location. "
                 "See: https://github.com/TheTarry/HomeAssistant-Test-Harness/blob/main/documentation/usage.md"
             )
 
@@ -109,7 +109,12 @@ class DockerComposeManager:
         # Validate that apps.yaml exists in the AppDaemon root (warning only)
         apps_yaml = self._appdaemon_config_root / "apps" / "apps.yaml"
         if not apps_yaml.exists():
-            logger.warning(f"apps/apps.yaml not found at {apps_yaml}. " "AppDaemon may not function correctly. " "Set APPDAEMON_CONFIG_ROOT environment variable to specify the location.")
+            logger.warning(
+                f"apps/apps.yaml not found at {apps_yaml}. "
+                "AppDaemon may not function correctly. "
+                "Ensure you have an 'appdaemon' subdirectory with your AppDaemon configuration, "
+                "or set APPDAEMON_CONFIG_ROOT environment variable to specify the location."
+            )
 
         # Set up containers directory path
         self._containers_dir = Path(__file__).parent / "containers"
@@ -128,7 +133,8 @@ class DockerComposeManager:
         """Detect the Home Assistant configuration root directory.
 
         Checks the HOME_ASSISTANT_CONFIG_ROOT environment variable first.
-        If not set, falls back to the current working directory.
+        If not set, falls back to the 'home_assistant' subdirectory in the
+        current working directory.
 
         Returns:
             Path: The detected Home Assistant configuration root directory.
@@ -139,15 +145,16 @@ class DockerComposeManager:
             logger.debug(f"Using Home Assistant root from HOME_ASSISTANT_CONFIG_ROOT: {ha_root}")
             return ha_root
 
-        ha_root = Path(os.getcwd())
-        logger.debug(f"HOME_ASSISTANT_CONFIG_ROOT not set, using current directory as Home Assistant root: {ha_root}")
+        ha_root = Path(os.getcwd()) / "home_assistant"
+        logger.debug(f"HOME_ASSISTANT_CONFIG_ROOT not set, using default 'home_assistant' subdirectory as Home Assistant root: {ha_root}")
         return ha_root
 
     def _detect_appdaemon_config_root(self) -> Path:
         """Detect the AppDaemon configuration root directory.
 
         Checks the APPDAEMON_CONFIG_ROOT environment variable first.
-        If not set, falls back to the current working directory.
+        If not set, falls back to the 'appdaemon' subdirectory in the
+        current working directory.
 
         Returns:
             Path: The detected AppDaemon configuration root directory.
@@ -158,8 +165,8 @@ class DockerComposeManager:
             logger.debug(f"Using AppDaemon root from APPDAEMON_CONFIG_ROOT: {appdaemon_root}")
             return appdaemon_root
 
-        appdaemon_root = Path(os.getcwd())
-        logger.debug(f"APPDAEMON_CONFIG_ROOT not set, using current directory as AppDaemon root: {appdaemon_root}")
+        appdaemon_root = Path(os.getcwd()) / "appdaemon"
+        logger.debug(f"APPDAEMON_CONFIG_ROOT not set, using default 'appdaemon' subdirectory as AppDaemon root: {appdaemon_root}")
         return appdaemon_root
 
     def start(self) -> None:

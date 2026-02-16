@@ -45,6 +45,7 @@ See the [Installation Guide](documentation/installation.md) for alternative meth
 - Docker Engine
 - Docker Compose V2
 - Home Assistant configuration directory with `configuration.yaml`
+- [Optional] AppDaemon directory with `apps.yaml`
 
 ### Write a Test
 
@@ -69,9 +70,9 @@ pytest
 
 The plugin automatically:
 
-1. Detects your Home Assistant configuration directory (via `HOME_ASSISTANT_CONFIG_ROOT` env var or current directory)
-2. Detects your AppDaemon configuration directory (via `APPDAEMON_CONFIG_ROOT` env var or current directory)
-3. Validates `configuration.yaml` exists in Home Assistant directory
+1. Detects your Home Assistant configuration directory (via `HOME_ASSISTANT_CONFIG_ROOT` env var or `home_assistant/` subdirectory)
+2. Detects your AppDaemon configuration directory (via `APPDAEMON_CONFIG_ROOT` env var or `appdaemon/` subdirectory)
+3. Validates `configuration.yaml` exists in Home Assistant configuration directory
 4. Validates `apps/apps.yaml` exists in AppDaemon directory (warning only)
 5. Mounts configuration directories into Docker containers
 6. Starts Home Assistant and AppDaemon

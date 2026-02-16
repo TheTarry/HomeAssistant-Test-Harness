@@ -62,7 +62,7 @@ The `DockerComposeManager` in [docker_manager.py](src/ha_integration_test_harnes
 
 1. Checks `HOME_ASSISTANT_CONFIG_ROOT` environment variable for Home Assistant config directory
 2. Checks `APPDAEMON_CONFIG_ROOT` environment variable for AppDaemon config directory
-3. Falls back to `os.getcwd()` if environment variables not set
+3. Falls back to `home_assistant/` and `appdaemon/` subdirectories in current working directory if environment variables not set
 4. Validates `configuration.yaml` exists in Home Assistant root (raises error if missing)
 5. Validates `apps/apps.yaml` exists in AppDaemon root (logs warning if missing, continues)
 6. Sets `HA_CONFIG_ROOT` and `APPDAEMON_CONFIG_ROOT` environment variables for docker-compose

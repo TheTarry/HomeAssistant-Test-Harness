@@ -7,9 +7,9 @@
 **Error:**
 
 ```text
-DockerError: configuration.yaml not found at /path/to/config/configuration.yaml.
-Tests must be run from a Home Assistant configuration directory.
-Set HOME_ASSISTANT_CONFIG_ROOT environment variable to specify the location.
+DockerError: configuration.yaml not found at /path/to/home_assistant/configuration.yaml.
+Tests must be run from a directory containing a 'home_assistant' subdirectory with your Home Assistant configuration,
+or set HOME_ASSISTANT_CONFIG_ROOT environment variable to specify the location.
 See: https://github.com/TheTarry/HomeAssistant-Test-Harness/blob/main/documentation/usage.md
 ```
 
@@ -17,14 +17,11 @@ See: https://github.com/TheTarry/HomeAssistant-Test-Harness/blob/main/documentat
 
 **Solution:**
 
-1. Ensure you're running tests from your Home Assistant configuration directory, or
-2. Set the environment variable to point to your configuration:
+The test harness expects either a specific directory structure or environment variables to be set. See the [Auto-Discovery section in the Usage Guide](usage.md#auto-discovery) for details on:
 
-   ```bash
-   export HOME_ASSISTANT_CONFIG_ROOT=/path/to/homeassistant/config
-   ```
-
-3. Verify `configuration.yaml` exists at the root of that directory
+- Using the default directory structure (recommended)
+- Setting environment variables to point to your existing configuration
+- Validating your configuration files are in the correct locations
 
 ### Docker Not Available
 
@@ -257,6 +254,8 @@ Containers are automatically stopped after tests, but logs are captured. Check t
 Navigate to the containers directory and run manually:
 
 ```bash
+# Set these to your actual configuration directories
+# For default structure, use: $(pwd)/home_assistant and $(pwd)/appdaemon
 export HA_CONFIG_ROOT=/path/to/homeassistant/config
 export APPDAEMON_CONFIG_ROOT=/path/to/appdaemon/config
 cd src/ha_integration_test_harness/containers
