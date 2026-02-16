@@ -322,8 +322,10 @@ def test_advance_to_sunset(home_assistant: HomeAssistant, time_machine: TimeMach
     assert_datetime_is_approx(home_assistant, next_setting)
 
     # Verify sun is below horizon (with polling to handle state transition delay)
-    # Sun setting can take minutes to fully transition to below_horizon, so we use a longer timeout here
-    home_assistant.assert_entity_state("sun.sun", "below_horizon", timeout=300)
+    # Sun setting can take minutes to fully transition to below_horizon, so we fast
+    # forward a number of minutes first
+    time_machine.fast_forward(timedelta(minutes=10))
+    home_assistant.assert_entity_state("sun.sun", "below_horizon")
 
 
 def test_advance_to_before_sunset(home_assistant: HomeAssistant, time_machine: TimeMachine) -> None:

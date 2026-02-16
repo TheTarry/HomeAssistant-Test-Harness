@@ -208,6 +208,9 @@ class DockerComposeManager:
             if e.stdout:
                 error_msg += f"\nStdout:\n{e.stdout}"
 
+            # Include container logs for debugging
+            error_msg += f"\n\n{self.get_container_diagnostics()}"
+
             raise DockerError(error_msg)
         except FileNotFoundError:
             raise DockerError("'docker' command not found. Ensure Docker is installed and available in PATH.")

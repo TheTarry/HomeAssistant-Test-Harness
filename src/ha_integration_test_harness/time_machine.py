@@ -97,7 +97,10 @@ class TimeMachine:
         """
         if self._fake_time is None:
             # Lazy initialization: use current time on first operation
+            # This only works if the container's initial fake time is set to "+0"
+            # (i.e., start with real current time).
             self._fake_time = datetime.now().replace(microsecond=0)
+            logger.debug(f"Initialized fake time from host clock (fallback): {self._fake_time}")
         return self._fake_time
 
     def _set_time(self, target_dt: datetime, log_message: str, error_message_prefix: str) -> None:
