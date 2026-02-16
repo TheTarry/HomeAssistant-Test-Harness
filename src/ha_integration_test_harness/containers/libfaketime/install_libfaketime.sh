@@ -11,14 +11,16 @@ echo "📅 Installing libfaketime from distribution packages..."
 if command -v apk > /dev/null 2>&1; then
     echo "📦 Installing libfaketime on Alpine..."
     apk add --no-cache libfaketime
-    LIBFAKETIME_PATH="/usr/lib/faketime/libfaketime.so.1"
+    # Use multi-threaded variant (MT) - essential for Home Assistant's multi-threaded environment
+    LIBFAKETIME_PATH="/usr/lib/faketime/libfaketimeMT.so.1"
 elif command -v apt-get > /dev/null 2>&1; then
     echo "📦 Installing libfaketime on Debian/Ubuntu..."
     apt-get update -qq
     apt-get install -y -qq libfaketime > /dev/null 2>&1
-    # Debian installs to /usr/lib/<arch>/faketime/libfaketime.so.1
+    # Debian installs to /usr/lib/<arch>/faketime/libfaketimeMT.so.1
     # Find the actual path (could be x86_64-linux-gnu, aarch64-linux-gnu, etc.)
-    LIBFAKETIME_PATH=$(find /usr/lib -name "libfaketime.so.1" 2>/dev/null | head -n 1)
+    # Use multi-threaded variant (MT) - essential for Home Assistant's multi-threaded environment
+    LIBFAKETIME_PATH=$(find /usr/lib -name "libfaketimeMT.so.1" 2>/dev/null | head -n 1)
     if [ -z "$LIBFAKETIME_PATH" ]; then
         echo "❌ libfaketime library not found after installation"
         exit 1
