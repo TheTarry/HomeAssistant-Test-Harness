@@ -1,4 +1,26 @@
-"""Example tests demonstrating automatic entity cleanup."""
+"""Example tests demonstrating automatic entity cleanup and persistent entities.
+
+This file demonstrates two entity management patterns:
+
+1. Per-test entities via given_an_entity():
+   - Created during a test via home_assistant.given_an_entity()
+   - Automatically cleaned up after each test
+   - Useful for test-specific temporary entities
+   - Helps avoid test pollution and cross-test coupling
+
+2. Persistent session entities:
+   - Defined in a YAML file (persistent_entities.yaml) referenced via pyproject.toml
+   - Registered with Home Assistant during container startup
+   - Available throughout the entire test session
+   - Never automatically removed
+   - Useful for simulating integration-created entities that tests depend on
+
+To use persistent entities:
+1. Create a YAML file with entity definitions (see persistent_entities.yaml)
+2. Add to your pyproject.toml:
+   [tool.pytest.ini_options]
+   ha_persistent_entities_path = "path/to/entities.yaml"
+"""
 
 from ha_integration_test_harness import HomeAssistant
 
@@ -69,3 +91,28 @@ def test_mixing_given_an_entity_with_manual_cleanup(home_assistant: HomeAssistan
     assert home_assistant.get_state("input_boolean.manual_cleanup") is None
 
     # The auto_cleanup entity will be cleaned up automatically
+
+
+def test_persistent_entities_available_with_expected_initial_state(home_assistant: HomeAssistant) -> None:
+    """Test that persistent entities exist and have expected initial state.
+
+    This test demonstrates that persistent entities (defined via the
+    ha_persistent_entities_path configuration) are registered during
+    container startup, available to all tests, and initialized to expected
+    values from persistent_entities.yaml.
+    """
+    home_assistant.assert_entity_state("input_boolean.guest_mode", "off")
+    home_assistant.assert_entity_state("input_number.target_temperature", "20.0")
+    home_assistant.assert_entity_state("input_select.house_mode", "Home")
+    home_assistant.assert_entity_state("counter.doorbell_presses", "0")
+
+    guest_mode = home_assistant.get_state("input_boolean.guest_mode")
+    assert guest_mode["attributes"]["icon"] == "mdi:account-group"
+
+    temperature = home_assistant.get_state("input_number.target_temperature")
+    assert float(temperature["attributes"]["min"]) == 10
+    assert float(temperature["attributes"]["max"]) == 30
+
+    house_mode = home_assistant.get_state("input_select.house_mode")
+    assert "Home" in house_mode["attributes"]["options"]
+    assert "Away" in house_mode["attributes"]["options"]
