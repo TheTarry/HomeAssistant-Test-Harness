@@ -165,15 +165,23 @@ class DockerComposeManager:
         if not entity_file.is_file():
             raise PersistentEntityError(f"Persistent entities path is not a file: {entity_file.absolute()}")
 
-        # Try to read and validate it's valid YAML
+        # Try to read and validate it's valid YAML with a suitable top-level structure
         try:
             with open(entity_file, "r") as f:
-                yaml.safe_load(f)
+                data = yaml.safe_load(f)
         except OSError as e:
             raise PersistentEntityError(f"Cannot read persistent entities file {entity_file}: {e}")
         except yaml.YAMLError as e:
             raise PersistentEntityError(f"Invalid YAML in persistent entities file {entity_file}: {e}")
 
+        # Home Assistant expects persistent entities packages to be defined as a non-empty mapping
+        # at the top level. Empty files, lists, scalars, or other structures will cause startup
+        # failures later, so fail fast with a clear error.
+        if not isinstance(data, dict) or not data:
+            raise PersistentEntityError(
+                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping "
+                "suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
+            )
         logger.info(f"Loaded persistent entities file: {entity_file.absolute()}")
         return entity_file.absolute()
 
