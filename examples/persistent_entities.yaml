@@ -1,0 +1,49 @@
+# Persistent Home Assistant Entities
+# These entities are registered during test session startup and
+# remain available throughout all tests.
+#
+# Define entities here that are created by integrations in your real HA setup
+# but are not managed through configuration.yaml.
+
+input_boolean:
+  guest_mode:
+    name: Guest Mode
+    initial: false
+    icon: mdi:account-group
+
+input_number:
+  target_temperature:
+    name: Target Temperature
+    initial: 20
+    min: 10
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+
+input_text:
+  alarm_code:
+    name: Alarm Code
+    initial: "1234"
+    max: 10
+
+input_select:
+  house_mode:
+    name: House Mode
+    initial: Home
+    options:
+      - Home
+      - Away
+      - Night
+    icon: mdi:home
+
+timer:
+  kitchen_timer:
+    name: Kitchen Timer
+
+counter:
+  doorbell_presses:
+    name: Doorbell Presses
+    initial: 0
+    step: 1
+    icon: mdi:bell

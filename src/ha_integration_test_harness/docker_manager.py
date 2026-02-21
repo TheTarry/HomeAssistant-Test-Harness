@@ -5,12 +5,16 @@ import logging
 import os
 import re
 import shlex
+import shutil
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Optional
 
-from .exceptions import DockerError
+import yaml  # type: ignore[import-untyped]
+
+from .exceptions import DockerError, PersistentEntityError
 
 logger = logging.getLogger(__name__)
 
@@ -79,14 +83,19 @@ class DockerComposeManager:
     Docker assigns ephemeral ports automatically to enable parallel test runs.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, persistent_entities_path: Optional[str] = None) -> None:
         """Initialize the Docker Compose manager.
 
         Sets up paths and generates a unique run ID for container isolation.
         The environment is not started automatically; call start() to launch it.
 
+        Args:
+            persistent_entities_path: Optional path to a YAML file containing persistent
+                Home Assistant entity definitions to be registered during container startup.
+
         Raises:
             DockerError: If configuration.yaml is not found in the detected Home Assistant root directory.
+            PersistentEntityError: If persistent entities file is invalid or cannot be processed.
         """
         self._run_id = uuid.uuid4().hex
 
@@ -128,6 +137,192 @@ class DockerComposeManager:
 
         # Container lifecycle state
         self._containers: dict[str, DockerContainer] = {}
+
+        # Persistent entities configuration
+        self._persistent_entities_path: Optional[Path] = None
+        self._staged_ha_config_root: Optional[Path] = None
+
+        # Load and validate persistent entities if provided
+        if persistent_entities_path:
+            self._persistent_entities_path = self._validate_persistent_entities_file(persistent_entities_path)
+
+    def _validate_persistent_entities_file(self, path: str) -> Path:
+        """Validate that persistent entities file exists and is readable.
+
+        Args:
+            path: Path to YAML file containing entity definitions.
+
+        Returns:
+            Absolute path to the entities file.
+
+        Raises:
+            PersistentEntityError: If file cannot be found or is not readable.
+        """
+        entity_file = Path(path)
+        if not entity_file.exists():
+            raise PersistentEntityError(f"Persistent entities file not found: {entity_file.absolute()}")
+
+        if not entity_file.is_file():
+            raise PersistentEntityError(f"Persistent entities path is not a file: {entity_file.absolute()}")
+
+        # Try to read and validate it's valid YAML
+        try:
+            with open(entity_file, "r") as f:
+                yaml.safe_load(f)
+        except OSError as e:
+            raise PersistentEntityError(f"Cannot read persistent entities file {entity_file}: {e}")
+        except yaml.YAMLError as e:
+            raise PersistentEntityError(f"Invalid YAML in persistent entities file {entity_file}: {e}")
+
+        logger.info(f"Loaded persistent entities file: {entity_file.absolute()}")
+        return entity_file.absolute()
+
+    def _stage_ha_config_with_entities(self) -> Path:
+        """Stage Home Assistant config directory with persistent entities overlay.
+
+        Creates a temporary copy of the HA config directory, copies the persistent
+        entities YAML file, and patches configuration.yaml to reference it via
+        `homeassistant.packages.test_harness`.
+
+        Returns:
+            Path to the staged configuration directory.
+
+        Raises:
+            PersistentEntityError: If staging fails.
+        """
+        if not self._persistent_entities_path:
+            return self._ha_config_root
+
+        # Create temporary staging directory
+        staging_dir = Path(tempfile.mkdtemp(prefix="ha_test_config_"))
+        logger.debug(f"Staging HA config to: {staging_dir}")
+
+        try:
+            # Copy original config to staging
+            for item in self._ha_config_root.iterdir():
+                src = self._ha_config_root / item.name
+                dst = staging_dir / item.name
+                if src.is_dir():
+                    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", ".storage"))
+                else:
+                    shutil.copy2(src, dst)
+
+            # Copy persistent entities YAML file into staged config root
+            entities_filename = self._persistent_entities_path.name
+            staged_entities_file = staging_dir / entities_filename
+            shutil.copy2(self._persistent_entities_path, staged_entities_file)
+            logger.debug(f"Copied persistent entities file to: {staged_entities_file}")
+
+            # Patch configuration.yaml to include the entities file
+            self._patch_configuration_yaml(staging_dir, entities_filename)
+
+            self._staged_ha_config_root = staging_dir
+            return staging_dir
+
+        except Exception:
+            # Clean up staging directory on error
+            if staging_dir.exists():
+                shutil.rmtree(staging_dir, ignore_errors=True)
+            raise
+
+    def _patch_configuration_yaml(self, staged_config_root: Path, entities_filename: str) -> None:
+        """Patch configuration.yaml to include persistent entities.
+
+                Ensures configuration.yaml includes:
+
+                homeassistant:
+                    packages:
+                        test_harness: !include <persistent entities file>
+
+                Existing `homeassistant` and `homeassistant.packages` keys are preserved.
+                The `test_harness` package entry is appended when missing.
+
+        Args:
+            staged_config_root: Root directory of staged config.
+            entities_filename: Name of the entities YAML file to include.
+
+        Raises:
+            PersistentEntityError: If patching fails.
+        """
+        config_file = staged_config_root / "configuration.yaml"
+        include_line = f"    test_harness: !include {entities_filename}"
+
+        def _line_indent(line: str) -> int:
+            return len(line) - len(line.lstrip(" "))
+
+        def _find_block_end(lines: list[str], start_index: int, base_indent: int) -> int:
+            index = start_index + 1
+            while index < len(lines):
+                stripped = lines[index].strip()
+                if not stripped or stripped.startswith("#"):
+                    index += 1
+                    continue
+
+                if _line_indent(lines[index]) <= base_indent:
+                    break
+                index += 1
+            return index
+
+        try:
+            with open(config_file, "r") as f:
+                content = f.read()
+
+            if include_line in content:
+                logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
+                return
+
+            lines = content.splitlines()
+
+            # Find top-level homeassistant block.
+            homeassistant_line_index = None
+            for index, line in enumerate(lines):
+                if line.strip() == "homeassistant:":
+                    homeassistant_line_index = index
+                    break
+
+            if homeassistant_line_index is not None:
+                homeassistant_end = _find_block_end(lines, homeassistant_line_index, 0)
+
+                packages_line_index = None
+                for index in range(homeassistant_line_index + 1, homeassistant_end):
+                    if _line_indent(lines[index]) == 2 and lines[index].strip().startswith("packages:"):
+                        packages_line_index = index
+                        break
+
+                if packages_line_index is None:
+                    lines.insert(homeassistant_line_index + 1, "  packages:")
+                    lines.insert(homeassistant_line_index + 2, include_line)
+                else:
+                    packages_value = lines[packages_line_index].split(":", 1)[1].strip()
+                    if packages_value:
+                        raise PersistentEntityError(
+                            "Cannot append persistent entities: existing 'homeassistant.packages' is not a mapping. " "Please convert it to a mapping before using ha_persistent_entities_path."
+                        )
+
+                    packages_end = _find_block_end(lines, packages_line_index, 2)
+
+                    has_test_harness = False
+                    for index in range(packages_line_index + 1, packages_end):
+                        if _line_indent(lines[index]) == 4 and lines[index].strip().startswith("test_harness:"):
+                            has_test_harness = True
+                            break
+
+                    if not has_test_harness:
+                        lines.insert(packages_end, include_line)
+
+                new_content = "\n".join(lines).rstrip() + "\n"
+            else:
+                # Append a minimal homeassistant.packages block.
+                new_content = content.rstrip() + "\n\n# Harness: Include persistent entities package\nhomeassistant:\n  packages:\n" + include_line + "\n"
+
+            with open(config_file, "w") as f:
+                f.write(new_content)
+
+            logger.debug(f"Patched configuration.yaml with homeassistant.packages.test_harness for {entities_filename}")
+        except PersistentEntityError:
+            raise
+        except OSError as e:
+            raise PersistentEntityError(f"Failed to patch configuration.yaml with persistent entities: {e}")
 
     def _detect_ha_config_root(self) -> Path:
         """Detect the Home Assistant configuration root directory.
@@ -179,15 +374,25 @@ class DockerComposeManager:
         - Starts AppDaemon on localhost:5050
         - Waits for AppDaemon to be healthy (via healthcheck)
 
+        If persistent entities are configured, stages the Home Assistant config
+        directory with the entities overlay before starting containers.
+
         Raises:
             DockerError: If the docker compose command fails or if the services
                 fail to start properly.
+            PersistentEntityError: If persistent entity configuration fails.
         """
         logger.debug("Starting docker-compose test environment...")
         try:
+            # Stage config with persistent entities if provided
+            if self._persistent_entities_path:
+                config_root = self._stage_ha_config_with_entities()
+            else:
+                config_root = self._ha_config_root
+
             # Set environment variables for docker-compose to mount the configuration directories
             env = os.environ.copy()
-            env["HA_CONFIG_ROOT"] = str(self._ha_config_root)
+            env["HA_CONFIG_ROOT"] = str(config_root)
             env["APPDAEMON_CONFIG_ROOT"] = str(self._appdaemon_config_root)
 
             subprocess.run(
@@ -239,29 +444,36 @@ class DockerComposeManager:
         """
         if not self._containers:
             logger.debug("Containers already stopped, skipping")
-            return
+        else:
+            logger.debug("Stopping docker-compose test environment...")
+            try:
+                subprocess.run(
+                    ["docker", "compose", "-p", self._run_id, "down", "-v"],
+                    cwd=self._containers_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                logger.debug("Docker-compose environment stopped successfully")
+            except subprocess.CalledProcessError as e:
+                error_msg = f"Failed to stop docker-compose environment (project: {self._run_id}): {e}"
+                if e.stderr:
+                    error_msg += f"\nStderr:\n{e.stderr}"
+                if e.stdout:
+                    error_msg += f"\nStdout:\n{e.stdout}"
+                logger.warning(error_msg)
+            except FileNotFoundError:
+                logger.warning("'docker' command not found. Ensure Docker is installed and available in PATH.")
+            finally:
+                self._containers.clear()
 
-        logger.debug("Stopping docker-compose test environment...")
-        try:
-            subprocess.run(
-                ["docker", "compose", "-p", self._run_id, "down", "-v"],
-                cwd=self._containers_dir,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            logger.debug("Docker-compose environment stopped successfully")
-        except subprocess.CalledProcessError as e:
-            error_msg = f"Failed to stop docker-compose environment (project: {self._run_id}): {e}"
-            if e.stderr:
-                error_msg += f"\nStderr:\n{e.stderr}"
-            if e.stdout:
-                error_msg += f"\nStdout:\n{e.stdout}"
-            logger.warning(error_msg)
-        except FileNotFoundError:
-            logger.warning("'docker' command not found. Ensure Docker is installed and available in PATH.")
-        finally:
-            self._containers.clear()
+        # Clean up staged config directory if it was created
+        if self._staged_ha_config_root and self._staged_ha_config_root.exists():
+            logger.debug(f"Cleaning up staged config directory: {self._staged_ha_config_root}")
+            try:
+                shutil.rmtree(self._staged_ha_config_root, ignore_errors=False)
+            except Exception as e:
+                logger.warning(f"Failed to clean up staged config directory: {e}")
 
     def get_container_diagnostics(self) -> str:
         """Dump logs from all containers for diagnostic purposes.
