@@ -228,14 +228,14 @@ class DockerComposeManager:
     def _patch_configuration_yaml(self, staged_config_root: Path, entities_filename: str) -> None:
         """Patch configuration.yaml to include persistent entities.
 
-                Ensures configuration.yaml includes:
+        Ensures configuration.yaml includes:
 
-                homeassistant:
-                    packages:
-                        test_harness: !include <persistent entities file>
+        homeassistant:
+            packages:
+                test_harness: !include <persistent entities file>
 
-                Existing `homeassistant` and `homeassistant.packages` keys are preserved.
-                The `test_harness` package entry is appended when missing.
+        Existing `homeassistant` and `homeassistant.packages` keys are preserved.
+        The `test_harness` package entry is appended when missing.
 
         Args:
             staged_config_root: Root directory of staged config.
