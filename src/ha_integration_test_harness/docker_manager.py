@@ -207,8 +207,9 @@ class DockerComposeManager:
                 else:
                     shutil.copy2(src, dst)
 
-            # Copy persistent entities YAML file into staged config root
-            entities_filename = self._persistent_entities_path.name
+            # Copy persistent entities YAML file into staged config root with a unique name
+            # to avoid collisions with any existing files in the HA config directory.
+            entities_filename = f"_harness_persistent_entities_{uuid.uuid4().hex}.yaml"
             staged_entities_file = staging_dir / entities_filename
             shutil.copy2(self._persistent_entities_path, staged_entities_file)
             logger.debug(f"Copied persistent entities file to: {staged_entities_file}")
