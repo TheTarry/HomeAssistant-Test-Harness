@@ -203,7 +203,7 @@ class DockerComposeManager:
                 src = self._ha_config_root / item.name
                 dst = staging_dir / item.name
                 if src.is_dir():
-                    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", ".storage"))
+                    shutil.copytree(src, dst, symlinks=False, ignore=shutil.ignore_patterns("__pycache__", ".storage"))
                 else:
                     shutil.copy2(src, dst)
 
