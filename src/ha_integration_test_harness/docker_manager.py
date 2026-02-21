@@ -179,8 +179,7 @@ class DockerComposeManager:
         # failures later, so fail fast with a clear error.
         if not isinstance(data, dict) or not data:
             raise PersistentEntityError(
-                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping "
-                "suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
+                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping " "suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
             )
         logger.info(f"Loaded persistent entities file: {entity_file.absolute()}")
         return entity_file.absolute()
