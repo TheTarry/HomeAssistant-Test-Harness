@@ -251,6 +251,9 @@ class DockerComposeManager:
         Existing `homeassistant` and `homeassistant.packages` keys are preserved.
         The `test_harness` package entry is appended when missing.
 
+        If `homeassistant:` delegates to an included file via `homeassistant: !include <file>`,
+        that file is patched instead.
+
         Args:
             staged_config_root: Root directory of staged config.
             entities_filename: Name of the entities YAML file to include.
@@ -259,75 +262,68 @@ class DockerComposeManager:
             PersistentEntityError: If patching fails.
         """
         config_file = staged_config_root / "configuration.yaml"
-        include_line = f"    test_harness: !include {entities_filename}"
-
-        def _line_indent(line: str) -> int:
-            return len(line) - len(line.lstrip(" "))
-
-        def _find_block_end(lines: list[str], start_index: int, base_indent: int) -> int:
-            index = start_index + 1
-            while index < len(lines):
-                stripped = lines[index].strip()
-                if not stripped or stripped.startswith("#"):
-                    index += 1
-                    continue
-
-                if _line_indent(lines[index]) <= base_indent:
-                    break
-                index += 1
-            return index
 
         try:
             with open(config_file, "r") as f:
                 content = f.read()
 
-            if include_line in content:
+            # Quick check: if the entry is already present, skip parsing.
+            if f"test_harness: !include {entities_filename}" in content:
                 logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
                 return
 
+            # Parse via YAML to locate keys by line number, correctly handling
+            # inline comments (e.g. "homeassistant: # comment") and HA-specific
+            # tags such as !include, !secret, and !env_var.
+            try:
+                root_node = yaml.compose(content, Loader=yaml.SafeLoader)
+            except yaml.YAMLError as e:
+                raise PersistentEntityError(f"Failed to parse configuration.yaml: {e}")
+
             lines = content.splitlines()
 
-            # Find top-level homeassistant block.
-            homeassistant_line_index = None
-            for index, line in enumerate(lines):
-                if line.strip() == "homeassistant:":
-                    homeassistant_line_index = index
-                    break
-
-            if homeassistant_line_index is not None:
-                homeassistant_end = _find_block_end(lines, homeassistant_line_index, 0)
-
-                packages_line_index = None
-                for index in range(homeassistant_line_index + 1, homeassistant_end):
-                    if _line_indent(lines[index]) == 2 and lines[index].strip().startswith("packages:"):
-                        packages_line_index = index
+            # Find the top-level homeassistant key node.
+            ha_key_node: Optional[yaml.ScalarNode] = None
+            ha_val_node: Optional[yaml.Node] = None
+            if isinstance(root_node, yaml.MappingNode):
+                for key_node, val_node in root_node.value:
+                    if isinstance(key_node, yaml.ScalarNode) and key_node.value == "homeassistant":
+                        ha_key_node = key_node
+                        ha_val_node = val_node
                         break
 
-                if packages_line_index is None:
-                    lines.insert(homeassistant_line_index + 1, "  packages:")
-                    lines.insert(homeassistant_line_index + 2, include_line)
-                else:
-                    packages_value = lines[packages_line_index].split(":", 1)[1].strip()
-                    if packages_value:
+            if ha_key_node is not None:
+                if isinstance(ha_val_node, yaml.MappingNode):
+                    if ha_val_node.flow_style:
                         raise PersistentEntityError(
-                            "Cannot append persistent entities: existing 'homeassistant.packages' is not a mapping. Please convert it to a mapping before using ha_persistent_entities_path."
+                            "Cannot append persistent entities: 'homeassistant' is a flow-style mapping in configuration.yaml. "
+                            "Please convert it to a block mapping before using ha_persistent_entities_path."
                         )
-
-                    packages_end = _find_block_end(lines, packages_line_index, 2)
-
-                    has_test_harness = False
-                    for index in range(packages_line_index + 1, packages_end):
-                        if _line_indent(lines[index]) == 4 and lines[index].strip().startswith("test_harness:"):
-                            has_test_harness = True
-                            break
-
-                    if not has_test_harness:
-                        lines.insert(packages_end, include_line)
-
-                new_content = "\n".join(lines).rstrip() + "\n"
+                    # Inline block mapping — patch packages within this content.
+                    new_content = self._patch_packages_in_mapping(content, ha_val_node, entities_filename)
+                    if new_content is None:
+                        return
+                elif isinstance(ha_val_node, yaml.ScalarNode) and ha_val_node.tag == "!include":
+                    # homeassistant is delegated to an included file — patch that file instead.
+                    include_file = staged_config_root / ha_val_node.value
+                    self._patch_homeassistant_include_file(include_file, entities_filename)
+                    return
+                elif isinstance(ha_val_node, yaml.ScalarNode) and ha_val_node.tag == "tag:yaml.org,2002:null":
+                    # homeassistant: with no value — insert packages block after the key line.
+                    ha_indent: int = ha_key_node.start_mark.column
+                    child_col = ha_indent + 2
+                    insert_at = ha_key_node.start_mark.line + 1
+                    lines.insert(insert_at, f"{' ' * child_col}packages:")
+                    lines.insert(insert_at + 1, f"{' ' * (child_col + 2)}test_harness: !include {entities_filename}")
+                    new_content = "\n".join(lines).rstrip() + "\n"
+                else:
+                    raise PersistentEntityError(
+                        "Cannot append persistent entities: 'homeassistant' must be a block mapping in configuration.yaml. "
+                        "Please convert it to a block mapping before using ha_persistent_entities_path."
+                    )
             else:
-                # Append a minimal homeassistant.packages block.
-                new_content = content.rstrip() + "\n\n# Harness: Include persistent entities package\nhomeassistant:\n  packages:\n" + include_line + "\n"
+                # No homeassistant key — append a minimal homeassistant.packages block.
+                new_content = content.rstrip() + f"\n\n# Harness: Include persistent entities package\nhomeassistant:\n  packages:\n    test_harness: !include {entities_filename}\n"
 
             with open(config_file, "w") as f:
                 f.write(new_content)
@@ -337,6 +333,139 @@ class DockerComposeManager:
             raise
         except OSError as e:
             raise PersistentEntityError(f"Failed to patch configuration.yaml with persistent entities: {e}")
+
+    @staticmethod
+    def _block_end_line(node: yaml.Node) -> int:
+        """Return the line index at which to insert content after a YAML block node."""
+        end_line: int = node.end_mark.line
+        end_col: int = node.end_mark.column
+        return end_line if end_col == 0 else end_line + 1
+
+    def _patch_packages_in_mapping(self, content: str, ha_mapping_node: yaml.MappingNode, entities_filename: str) -> Optional[str]:
+        """Find and patch the packages key in a homeassistant block mapping.
+
+        Handles all packages value forms: null/empty (inserts entry), block mapping
+        (appends entry), flow-style mapping (rewrites to block then appends).
+
+        Args:
+            content: Text of the file containing ha_mapping_node.
+            ha_mapping_node: The MappingNode that is the homeassistant block body.
+            entities_filename: Name of the entities file to include.
+
+        Returns:
+            Patched content string, or None if test_harness is already present.
+
+        Raises:
+            PersistentEntityError: If packages has an unsupported structure.
+        """
+        if f"test_harness: !include {entities_filename}" in content:
+            return None
+
+        lines = content.splitlines()
+
+        # Find the packages key in the mapping.
+        pkg_key_node: Optional[yaml.ScalarNode] = None
+        pkg_val_node: Optional[yaml.Node] = None
+        for key_node, val_node in ha_mapping_node.value:
+            if isinstance(key_node, yaml.ScalarNode) and key_node.value == "packages":
+                pkg_key_node = key_node
+                pkg_val_node = val_node
+                break
+
+        if pkg_key_node is None:
+            # No packages key — derive child indentation from existing children, or default to col+2.
+            child_col = ha_mapping_node.value[0][0].start_mark.column if ha_mapping_node.value else 0
+            insert_at = self._block_end_line(ha_mapping_node)
+            lines.insert(insert_at, f"{' ' * child_col}packages:")
+            lines.insert(insert_at + 1, f"{' ' * (child_col + 2)}test_harness: !include {entities_filename}")
+        elif isinstance(pkg_val_node, yaml.MappingNode):
+            if pkg_val_node.flow_style:
+                # Rewrite the single-line flow mapping to block style.
+                for key_node, _ in pkg_val_node.value:
+                    if isinstance(key_node, yaml.ScalarNode) and key_node.value == "test_harness":
+                        return None
+                pkg_col: int = pkg_key_node.start_mark.column
+                pkg_child_col_flow: int = pkg_col + 2
+                block_lines = [f"{' ' * pkg_col}packages:"]
+                for key_node, val_node in pkg_val_node.value:
+                    # Reconstruct each entry verbatim from the source (preserves tags like !include).
+                    start_idx: int = key_node.start_mark.index
+                    end_idx: int = val_node.end_mark.index
+                    entry_text = content[start_idx:end_idx]
+                    block_lines.append(f"{' ' * pkg_child_col_flow}{entry_text}")
+                block_lines.append(f"{' ' * pkg_child_col_flow}test_harness: !include {entities_filename}")
+                pkg_line: int = pkg_key_node.start_mark.line
+                pkg_end_line_plus1: int = pkg_val_node.end_mark.line + 1
+                lines[pkg_line:pkg_end_line_plus1] = block_lines
+            else:
+                # Block mapping — derive test_harness indent from first existing entry, or fallback.
+                pkg_child_col: int = pkg_val_node.value[0][0].start_mark.column if pkg_val_node.value else pkg_key_node.start_mark.column + 2
+                for key_node, _ in pkg_val_node.value:
+                    if isinstance(key_node, yaml.ScalarNode) and key_node.value == "test_harness":
+                        return None
+                lines.insert(
+                    self._block_end_line(pkg_val_node),
+                    f"{' ' * pkg_child_col}test_harness: !include {entities_filename}",
+                )
+        elif isinstance(pkg_val_node, yaml.ScalarNode) and pkg_val_node.tag == "tag:yaml.org,2002:null":
+            # packages: is present but empty — insert test_harness after the packages: line.
+            lines.insert(
+                pkg_key_node.start_mark.line + 1,
+                f"{' ' * (pkg_key_node.start_mark.column + 2)}test_harness: !include {entities_filename}",
+            )
+        else:
+            raise PersistentEntityError(
+                "Cannot append persistent entities: existing 'homeassistant.packages' is not a block mapping. " "Please convert it to a block mapping before using ha_persistent_entities_path."
+            )
+
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _patch_homeassistant_include_file(self, include_file: Path, entities_filename: str) -> None:
+        """Patch a homeassistant !include file to add packages.test_harness.
+
+        When configuration.yaml uses `homeassistant: !include <file>`, the included
+        file contains the homeassistant block body. This method patches that file to
+        ensure `packages.test_harness` is present.
+
+        Args:
+            include_file: Path to the included homeassistant configuration file.
+            entities_filename: Name of the entities file to include.
+
+        Raises:
+            PersistentEntityError: If the file cannot be read, parsed, or patched.
+        """
+        try:
+            with open(include_file, "r") as f:
+                content = f.read()
+
+            if f"test_harness: !include {entities_filename}" in content:
+                logger.debug(f"{include_file.name} already includes homeassistant.packages.test_harness")
+                return
+
+            try:
+                root_node = yaml.compose(content, Loader=yaml.SafeLoader)
+            except yaml.YAMLError as e:
+                raise PersistentEntityError(f"Failed to parse homeassistant include file {include_file.name}: {e}")
+
+            if not isinstance(root_node, yaml.MappingNode) or root_node.flow_style:
+                raise PersistentEntityError(
+                    f"Cannot append persistent entities: homeassistant include file '{include_file.name}' "
+                    "must have a block mapping at root level. "
+                    "Please convert it to a block mapping before using ha_persistent_entities_path."
+                )
+
+            new_content = self._patch_packages_in_mapping(content, root_node, entities_filename)
+            if new_content is None:
+                return
+
+            with open(include_file, "w") as f:
+                f.write(new_content)
+
+            logger.debug(f"Patched {include_file.name} with homeassistant.packages.test_harness for {entities_filename}")
+        except PersistentEntityError:
+            raise
+        except OSError as e:
+            raise PersistentEntityError(f"Failed to patch homeassistant include file {include_file.name}: {e}")
 
     def _detect_ha_config_root(self) -> Path:
         """Detect the Home Assistant configuration root directory.
