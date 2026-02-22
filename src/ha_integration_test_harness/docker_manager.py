@@ -373,8 +373,8 @@ class DockerComposeManager:
                 break
 
         if pkg_key_node is None:
-            # No packages key — derive child indentation from existing children, or default to col+2.
-            child_col = ha_mapping_node.value[0][0].start_mark.column if ha_mapping_node.value else 0
+            # No packages key — derive child indentation from existing children, or default to parent col+2.
+            child_col = ha_mapping_node.value[0][0].start_mark.column if ha_mapping_node.value else ha_mapping_node.start_mark.column + 2
             insert_at = self._block_end_line(ha_mapping_node)
             lines.insert(insert_at, f"{' ' * child_col}packages:")
             lines.insert(insert_at + 1, f"{' ' * (child_col + 2)}test_harness: !include {entities_filename}")
