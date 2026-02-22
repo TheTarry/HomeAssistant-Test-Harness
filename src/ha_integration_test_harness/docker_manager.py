@@ -259,22 +259,6 @@ class DockerComposeManager:
         config_file = staged_config_root / "configuration.yaml"
         include_line = f"    test_harness: !include {entities_filename}"
 
-        def _line_indent(line: str) -> int:
-            return len(line) - len(line.lstrip(" "))
-
-        def _find_block_end(lines: list[str], start_index: int, base_indent: int) -> int:
-            index = start_index + 1
-            while index < len(lines):
-                stripped = lines[index].strip()
-                if not stripped or stripped.startswith("#"):
-                    index += 1
-                    continue
-
-                if _line_indent(lines[index]) <= base_indent:
-                    break
-                index += 1
-            return index
-
         try:
             with open(config_file, "r") as f:
                 content = f.read()
@@ -283,48 +267,69 @@ class DockerComposeManager:
                 logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
                 return
 
+            # Parse via YAML to locate keys by line number, correctly handling
+            # inline comments (e.g. "homeassistant: # comment") and HA-specific
+            # tags such as !include, !secret, and !env_var.
+            try:
+                root_node = yaml.compose(content, Loader=yaml.SafeLoader)
+            except yaml.YAMLError as e:
+                raise PersistentEntityError(f"Failed to parse configuration.yaml: {e}")
+
             lines = content.splitlines()
 
-            # Find top-level homeassistant block.
-            homeassistant_line_index = None
-            for index, line in enumerate(lines):
-                if line.strip() == "homeassistant:":
-                    homeassistant_line_index = index
-                    break
-
-            if homeassistant_line_index is not None:
-                homeassistant_end = _find_block_end(lines, homeassistant_line_index, 0)
-
-                packages_line_index = None
-                for index in range(homeassistant_line_index + 1, homeassistant_end):
-                    if _line_indent(lines[index]) == 2 and lines[index].strip().startswith("packages:"):
-                        packages_line_index = index
+            # Find the top-level homeassistant key node.
+            ha_key_node: Optional[yaml.ScalarNode] = None
+            ha_val_node: Optional[yaml.Node] = None
+            if isinstance(root_node, yaml.MappingNode):
+                for key_node, val_node in root_node.value:
+                    if isinstance(key_node, yaml.ScalarNode) and key_node.value == "homeassistant":
+                        ha_key_node = key_node
+                        ha_val_node = val_node
                         break
 
-                if packages_line_index is None:
-                    lines.insert(homeassistant_line_index + 1, "  packages:")
-                    lines.insert(homeassistant_line_index + 2, include_line)
-                else:
-                    packages_value = lines[packages_line_index].split(":", 1)[1].strip()
-                    if packages_value:
-                        raise PersistentEntityError(
-                            "Cannot append persistent entities: existing 'homeassistant.packages' is not a mapping. " "Please convert it to a mapping before using ha_persistent_entities_path."
-                        )
-
-                    packages_end = _find_block_end(lines, packages_line_index, 2)
-
-                    has_test_harness = False
-                    for index in range(packages_line_index + 1, packages_end):
-                        if _line_indent(lines[index]) == 4 and lines[index].strip().startswith("test_harness:"):
-                            has_test_harness = True
+            if ha_key_node is not None:
+                # Find the packages key within homeassistant.
+                pkg_key_node: Optional[yaml.ScalarNode] = None
+                pkg_val_node: Optional[yaml.Node] = None
+                if isinstance(ha_val_node, yaml.MappingNode):
+                    for key_node, val_node in ha_val_node.value:
+                        if isinstance(key_node, yaml.ScalarNode) and key_node.value == "packages":
+                            pkg_key_node = key_node
+                            pkg_val_node = val_node
                             break
 
-                    if not has_test_harness:
-                        lines.insert(packages_end, include_line)
+                def _block_end_line(node: yaml.Node) -> int:
+                    """Return the line index at which to insert content after a YAML block node."""
+                    end_line: int = node.end_mark.line
+                    end_col: int = node.end_mark.column
+                    return end_line if end_col == 0 else end_line + 1
+
+                if pkg_key_node is None:
+                    # No packages key — insert it at the end of the homeassistant block.
+                    if isinstance(ha_val_node, yaml.MappingNode):
+                        insert_at = _block_end_line(ha_val_node)
+                    else:
+                        insert_at = ha_key_node.start_mark.line + 1
+                    lines.insert(insert_at, "  packages:")
+                    lines.insert(insert_at + 1, include_line)
+                elif isinstance(pkg_val_node, yaml.MappingNode):
+                    # packages has existing entries — check for test_harness and append.
+                    for key_node, _ in pkg_val_node.value:
+                        if isinstance(key_node, yaml.ScalarNode) and key_node.value == "test_harness":
+                            logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
+                            return
+                    lines.insert(_block_end_line(pkg_val_node), include_line)
+                elif isinstance(pkg_val_node, yaml.ScalarNode) and pkg_val_node.tag == "tag:yaml.org,2002:null":
+                    # packages: is present but empty (null value) — insert after it.
+                    lines.insert(pkg_key_node.start_mark.line + 1, include_line)
+                else:
+                    raise PersistentEntityError(
+                        "Cannot append persistent entities: existing 'homeassistant.packages' is not a mapping. " "Please convert it to a mapping before using ha_persistent_entities_path."
+                    )
 
                 new_content = "\n".join(lines).rstrip() + "\n"
             else:
-                # Append a minimal homeassistant.packages block.
+                # No homeassistant key — append a minimal homeassistant.packages block.
                 new_content = content.rstrip() + "\n\n# Harness: Include persistent entities package\nhomeassistant:\n  packages:\n" + include_line + "\n"
 
             with open(config_file, "w") as f:
