@@ -313,7 +313,7 @@ class DockerComposeManager:
                         )
                     staged_root_abs = staged_config_root.resolve()
                     include_file = (staged_config_root / include_path).resolve()
-                    if staged_root_abs not in include_file.parents:
+                    if not include_file.is_relative_to(staged_root_abs):
                         raise PersistentEntityError(
                             "Cannot append persistent entities: 'homeassistant: !include' resolves outside the staged Home Assistant "
                             "configuration directory. Please use an include path within the staged config."
