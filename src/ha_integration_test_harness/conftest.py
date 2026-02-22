@@ -68,8 +68,12 @@ def docker(request: pytest.FixtureRequest) -> Generator[DockerComposeManager, No
         entities_path = Path(str(persistent_entities_path))
         if not entities_path.is_absolute():
             inipath = getattr(request.config, "inipath", None)
-            if inipath is not None:
-                entities_path = Path(str(inipath)).parent / entities_path
+            if inipath is None:
+                raise ValueError(
+                    "ha_persistent_entities_path is a relative path, but no pytest config file (e.g. pytest.ini, pyproject.toml) was found. "
+                    "Either use an absolute path or run pytest from a directory containing a config file."
+                )
+            entities_path = Path(str(inipath)).parent / entities_path
         persistent_entities_path = str(entities_path)
 
     manager = DockerComposeManager(persistent_entities_path=persistent_entities_path)
