@@ -179,7 +179,7 @@ class DockerComposeManager:
         # failures later, so fail fast with a clear error.
         if not isinstance(data, dict) or not data:
             raise PersistentEntityError(
-                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping " "suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
+                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
             )
         logger.info(f"Loaded persistent entities file: {entity_file.absolute()}")
         return entity_file.absolute()
@@ -310,7 +310,7 @@ class DockerComposeManager:
                     packages_value = lines[packages_line_index].split(":", 1)[1].strip()
                     if packages_value:
                         raise PersistentEntityError(
-                            "Cannot append persistent entities: existing 'homeassistant.packages' is not a mapping. " "Please convert it to a mapping before using ha_persistent_entities_path."
+                            "Cannot append persistent entities: existing 'homeassistant.packages' is not a mapping. Please convert it to a mapping before using ha_persistent_entities_path."
                         )
 
                     packages_end = _find_block_end(lines, packages_line_index, 2)
