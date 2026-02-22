@@ -179,7 +179,7 @@ class DockerComposeManager:
         # failures later, so fail fast with a clear error.
         if not isinstance(data, dict) or not data:
             raise PersistentEntityError(
-                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping " "suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
+                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
             )
         logger.info(f"Loaded persistent entities file: {entity_file.absolute()}")
         return entity_file.absolute()
@@ -212,7 +212,7 @@ class DockerComposeManager:
                 dst = staging_dir / item.name
                 if src.is_dir():
                     shutil.copytree(src, dst, symlinks=False, ignore=shutil.ignore_patterns("__pycache__", ".storage"))
-                else:
+                elif item.name != ".storage":
                     shutil.copy2(src, dst)
 
             # Copy persistent entities YAML file into staged config root with a unique name
