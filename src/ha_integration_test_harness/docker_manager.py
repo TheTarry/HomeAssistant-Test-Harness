@@ -204,6 +204,7 @@ class DockerComposeManager:
         staging_dir = Path(tempfile.mkdtemp(prefix="ha_test_config_"))
         logger.debug(f"Staging HA config to: {staging_dir}")
 
+        success = False
         try:
             # Copy original config to staging
             for item in self._ha_config_root.iterdir():
@@ -225,13 +226,16 @@ class DockerComposeManager:
             self._patch_configuration_yaml(staging_dir, entities_filename)
 
             self._staged_ha_config_root = staging_dir
+            success = True
             return staging_dir
 
-        except Exception:
-            # Clean up staging directory on error
-            if staging_dir.exists():
-                shutil.rmtree(staging_dir, ignore_errors=True)
+        except PersistentEntityError:
             raise
+        except (OSError, shutil.Error) as e:
+            raise PersistentEntityError(f"Failed to stage Home Assistant configuration: {e}")
+        finally:
+            if not success and staging_dir.exists():
+                shutil.rmtree(staging_dir, ignore_errors=True)
 
     def _patch_configuration_yaml(self, staged_config_root: Path, entities_filename: str) -> None:
         """Patch configuration.yaml to include persistent entities.
