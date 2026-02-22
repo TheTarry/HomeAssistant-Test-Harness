@@ -305,7 +305,19 @@ class DockerComposeManager:
                         return
                 elif isinstance(ha_val_node, yaml.ScalarNode) and ha_val_node.tag == "!include":
                     # homeassistant is delegated to an included file — patch that file instead.
-                    include_file = staged_config_root / ha_val_node.value
+                    include_path = Path(ha_val_node.value)
+                    if include_path.is_absolute():
+                        raise PersistentEntityError(
+                            "Cannot append persistent entities: 'homeassistant: !include' must use a relative path inside the staged "
+                            "Home Assistant configuration. Absolute include paths are not supported."
+                        )
+                    staged_root_abs = Path(os.path.abspath(str(staged_config_root)))
+                    include_file = Path(os.path.abspath(os.path.join(str(staged_config_root), str(include_path))))
+                    if include_file != staged_root_abs and staged_root_abs not in include_file.parents:
+                        raise PersistentEntityError(
+                            "Cannot append persistent entities: 'homeassistant: !include' resolves outside the staged Home Assistant "
+                            "configuration directory. Please use an include path within the staged config."
+                        )
                     self._patch_homeassistant_include_file(include_file, entities_filename)
                     return
                 elif isinstance(ha_val_node, yaml.ScalarNode) and ha_val_node.tag == "tag:yaml.org,2002:null":
