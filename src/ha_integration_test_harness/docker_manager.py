@@ -208,6 +208,8 @@ class DockerComposeManager:
         try:
             # Copy original config to staging
             for item in self._ha_config_root.iterdir():
+                if item.name in (".storage", "__pycache__"):
+                    continue
                 src = self._ha_config_root / item.name
                 dst = staging_dir / item.name
                 if src.is_dir():
