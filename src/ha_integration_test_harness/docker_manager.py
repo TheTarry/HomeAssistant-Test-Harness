@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 from .exceptions import DockerError, PersistentEntityError
 
