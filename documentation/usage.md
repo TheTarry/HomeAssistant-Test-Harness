@@ -155,13 +155,171 @@ def test_scheduled_automation(home_assistant, time_machine):
 ### Polling for State Changes
 
 ```python
-def test_automation_with_delay(home_assistant):
+def test_polling_with_assert(home_assistant):
     """Test automation that has a delay."""
     home_assistant.set_state("binary_sensor.motion", "on")
 
     # Poll until light turns on (or timeout after 30 seconds)
     home_assistant.assert_entity_state("light.living_room", "on", timeout=30)
 ```
+
+## Persistent Session Entities
+
+### About Persistent Entities
+
+Home Assistant integrations often create entities dynamically at runtime — sensors from MQTT,
+climate devices from Z-Wave, media players from Sonos, etc. These integration-created entities are
+not typically defined in `configuration.yaml`, but your automations and scripts can depend on them.
+
+The harness supports **persistent session entities**: a YAML file of entity definitions that are
+registered with the test instance of Home Assistant during container startup. Unlike per-test
+entities created via `given_an_entity()`, persistent entities simulate real integration-created
+entities and are never automatically removed between tests.
+
+### When to Use Persistent Entities
+
+Use persistent entities when:
+
+- Your automations/scripts reference entities created by integrations (e.g., `light.bedroom` from a Zigbee integration)
+- You need consistent, reliable entity references across multiple tests
+- You want to avoid setting up the same entities in every test function
+- Tests fail because Home Assistant doesn't recognize services (e.g., `light.turn_on`) due to missing domain entities
+
+**Example scenario:**
+
+```yaml
+# Your automation in configuration.yaml
+automation:
+  - id: sunset_lights
+    alias: Sunset - Turn on lights
+    trigger:
+      platform: sun
+      event: sunset
+    action:
+      - action: light.turn_on
+        target:
+          entity_id:
+            - light.bedroom
+            - light.living_room
+```
+
+To test this automation, you need `light.bedroom` and `light.living_room` to exist. Rather than creating them in every test with `given_an_entity()`, define them once in a persistent entities file.
+
+### Configuration
+
+Create a YAML file with your persistent entity definitions:
+
+```yaml
+# persistent_entities.yaml
+input_boolean:
+  guest_mode:
+    name: "Guest Mode"
+    initial: false
+
+input_number:
+  temperature:
+    name: "Target Temperature"
+    initial: 20
+    min: 10
+    max: 30
+
+light:
+  - platform: template
+    lights:
+      living_room_lamp:
+        friendly_name: "Living Room Lamp"
+        value_template: "{{ is_state('light.living_room_lamp', 'on') }}"
+        turn_on:
+          - stop: "Turning on light"
+        turn_off:
+          - stop: "Turning off light"
+
+switch:
+  - platform: template
+    switches:
+      garage_door:
+        friendly_name: "Garage Door"
+        value_template: "{{ is_state('switch.garage_door', 'on') }}"
+        turn_on:
+          - stop: "Switch turned on"
+        turn_off:
+          - stop: "Switch turned off"
+```
+
+Then reference the YAML file in your pytest configuration:
+
+```toml
+[tool.pytest.ini_options]
+ha_persistent_entities_path = "persistent_entities.yaml"
+```
+
+### YAML Format
+
+Define entities by domain using standard [Home Assistant Packages](https://www.home-assistant.io/docs/configuration/packages/) structure.
+Any domain/entity configuration that Home Assistant supports can be included. During startup,
+the test harness copies your persistent entities file into a staged configuration directory under a
+unique generated filename (e.g. `_harness_persistent_entities_<uuid>.yaml`), then patches
+`configuration.yaml` in that staged directory to reference the generated filename:
+
+```yaml
+homeassistant:
+  packages:
+    test_harness: !include _harness_persistent_entities_<uuid>.yaml
+```
+
+The `!include` path in `configuration.yaml` will reference the staged filename, **not** the original basename
+you specified in `ha_persistent_entities_path`. This is expected behavior - if you inspect the staged
+`configuration.yaml` while troubleshooting, you will see the generated name rather than your original filename.
+
+This keeps your existing configuration intact while loading persistent entities from a separate file.
+
+### Startup Behavior
+
+When `ha_persistent_entities_path` is configured:
+
+1. **At initialization**: The harness validates the YAML file
+2. **At container startup**:
+  - Creates a temporary copy of your Home Assistant configuration directory
+  - Copies the persistent entities YAML file into the staged config under a unique generated name
+    (e.g. `_harness_persistent_entities_<uuid>.yaml`) to avoid conflicts with any existing files
+  - Patches `configuration.yaml` in the staged config to append `homeassistant.packages.test_harness`
+    with an `!include` pointing to the generated filename
+  - Starts Home Assistant with the staged configuration
+3. **Your original config is never modified** - staging ensures isolation
+4. **Entities are registered during HA startup**, so all domain services are properly initialized
+
+### Example Test
+
+```python
+def test_sunset_automation(home_assistant, time_machine):
+    """Test the sunset automation with persistent entities.
+
+    Assumes light.bedroom and light.living_room are defined in
+    persistent_entities.yaml
+    """
+    # Entities are already registered and available at test start
+    assert home_assistant.get_state("light.bedroom")["state"] == "off"
+    assert home_assistant.get_state("light.living_room")["state"] == "off"
+
+    # Advance time to sunset
+    time_machine.advance_to_preset("sunset", offset=timedelta(minutes=1))
+
+    # Verify automation triggered both lights
+    home_assistant.assert_entity_state("light.bedroom", "on", timeout=5)
+    home_assistant.assert_entity_state("light.living_room", "on", timeout=5)
+```
+
+### Comparison: Per-Test vs. Persistent
+
+| Feature | Per-Test (`given_an_entity`) | Persistent (YAML file) |
+|---------|------------------------------|------------------------|
+| Creation | During test via Python | At container startup |
+| Scope | Single test function | Entire session |
+| Cleanup | Automatic after test | Never (session lifetime) |
+| Domain services | May not be available early* | Always available |
+| Use case | Temporary test-specific data | Integration-created entities |
+
+*Per-test entities may miss early automations that run during HA startup.
 
 ## Best Practices
 

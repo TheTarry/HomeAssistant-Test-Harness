@@ -5,12 +5,16 @@ import logging
 import os
 import re
 import shlex
+import shutil
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Optional
 
-from .exceptions import DockerError
+import yaml
+
+from .exceptions import DockerError, PersistentEntityError
 
 logger = logging.getLogger(__name__)
 
@@ -79,14 +83,19 @@ class DockerComposeManager:
     Docker assigns ephemeral ports automatically to enable parallel test runs.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, persistent_entities_path: Optional[str] = None) -> None:
         """Initialize the Docker Compose manager.
 
         Sets up paths and generates a unique run ID for container isolation.
         The environment is not started automatically; call start() to launch it.
 
+        Args:
+            persistent_entities_path: Optional path to a YAML file containing persistent
+                Home Assistant entity definitions to be registered during container startup.
+
         Raises:
             DockerError: If configuration.yaml is not found in the detected Home Assistant root directory.
+            PersistentEntityError: If persistent entities file is invalid or cannot be processed.
         """
         self._run_id = uuid.uuid4().hex
 
@@ -128,6 +137,347 @@ class DockerComposeManager:
 
         # Container lifecycle state
         self._containers: dict[str, DockerContainer] = {}
+
+        # Persistent entities configuration
+        self._persistent_entities_path: Optional[Path] = None
+        self._staged_ha_config_root: Optional[Path] = None
+
+        # Load and validate persistent entities if provided
+        if persistent_entities_path:
+            self._persistent_entities_path = self._validate_persistent_entities_file(persistent_entities_path)
+
+    def _validate_persistent_entities_file(self, path: str) -> Path:
+        """Validate that persistent entities file exists and is readable.
+
+        Args:
+            path: Path to YAML file containing entity definitions.
+
+        Returns:
+            Absolute path to the entities file.
+
+        Raises:
+            PersistentEntityError: If file cannot be found or is not readable.
+        """
+        entity_file = Path(path)
+        if not entity_file.exists():
+            raise PersistentEntityError(f"Persistent entities file not found: {entity_file.absolute()}")
+
+        if not entity_file.is_file():
+            raise PersistentEntityError(f"Persistent entities path is not a file: {entity_file.absolute()}")
+
+        # Try to read and validate it's valid YAML with a suitable top-level structure
+        try:
+            with open(entity_file, "r") as f:
+                data = yaml.safe_load(f)
+        except OSError as e:
+            raise PersistentEntityError(f"Cannot read persistent entities file {entity_file}: {e}")
+        except yaml.YAMLError as e:
+            raise PersistentEntityError(f"Invalid YAML in persistent entities file {entity_file}: {e}")
+
+        # Home Assistant expects persistent entities packages to be defined as a non-empty mapping
+        # at the top level. Empty files, lists, scalars, or other structures will cause startup
+        # failures later, so fail fast with a clear error.
+        if not isinstance(data, dict) or not data:
+            raise PersistentEntityError(
+                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
+            )
+        logger.info(f"Loaded persistent entities file: {entity_file.absolute()}")
+        return entity_file.absolute()
+
+    def _stage_ha_config_with_entities(self) -> Path:
+        """Stage Home Assistant config directory with persistent entities overlay.
+
+        Creates a temporary copy of the HA config directory, copies the persistent
+        entities YAML file, and patches configuration.yaml to reference it via
+        `homeassistant.packages.test_harness`.
+
+        Returns:
+            Path to the staged configuration directory.
+
+        Raises:
+            PersistentEntityError: If staging fails.
+        """
+        if not self._persistent_entities_path:
+            return self._ha_config_root
+
+        # Create temporary staging directory
+        staging_dir = Path(tempfile.mkdtemp(prefix="ha_test_config_"))
+        logger.debug(f"Staging HA config to: {staging_dir}")
+
+        success = False
+        try:
+            # Copy original config to staging
+            for item in self._ha_config_root.iterdir():
+                if item.name in (".storage", "__pycache__"):
+                    continue
+                src = self._ha_config_root / item.name
+                dst = staging_dir / item.name
+                if src.is_dir():
+                    shutil.copytree(src, dst, symlinks=False, ignore=shutil.ignore_patterns("__pycache__", ".storage"))
+                else:
+                    shutil.copy2(src, dst)
+
+            # Copy persistent entities YAML file into staged config root with a unique name
+            # to avoid collisions with any existing files in the HA config directory.
+            entities_filename = f"_harness_persistent_entities_{uuid.uuid4().hex}.yaml"
+            staged_entities_file = staging_dir / entities_filename
+            shutil.copy2(self._persistent_entities_path, staged_entities_file)
+            logger.debug(f"Copied persistent entities file to: {staged_entities_file}")
+
+            # Patch configuration.yaml to include the entities file
+            self._patch_configuration_yaml(staging_dir, entities_filename)
+
+            self._staged_ha_config_root = staging_dir
+            success = True
+            return staging_dir
+
+        except PersistentEntityError:
+            raise
+        except (OSError, shutil.Error) as e:
+            raise PersistentEntityError(f"Failed to stage Home Assistant configuration: {e}")
+        finally:
+            if not success and staging_dir.exists():
+                shutil.rmtree(staging_dir, ignore_errors=True)
+
+    def _patch_configuration_yaml(self, staged_config_root: Path, entities_filename: str) -> None:
+        """Patch configuration.yaml to include persistent entities.
+
+        Ensures configuration.yaml includes:
+
+        homeassistant:
+            packages:
+                test_harness: !include <persistent entities file>
+
+        Existing `homeassistant` and `homeassistant.packages` keys are preserved.
+        The `test_harness` package entry is appended when missing.
+
+        If `homeassistant:` delegates to an included file via `homeassistant: !include <file>`,
+        that file is patched instead.
+
+        Args:
+            staged_config_root: Root directory of staged config.
+            entities_filename: Name of the entities YAML file to include.
+
+        Raises:
+            PersistentEntityError: If patching fails.
+        """
+        config_file = staged_config_root / "configuration.yaml"
+
+        try:
+            with open(config_file, "r") as f:
+                content = f.read()
+
+            # Quick check: if the entry is already present, skip parsing.
+            if f"test_harness: !include {entities_filename}" in content:
+                logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
+                return
+
+            # Parse via YAML to locate keys by line number, correctly handling
+            # inline comments (e.g. "homeassistant: # comment") and HA-specific
+            # tags such as !include, !secret, and !env_var.
+            try:
+                root_node = yaml.compose(content, Loader=yaml.SafeLoader)
+            except yaml.YAMLError as e:
+                raise PersistentEntityError(f"Failed to parse configuration.yaml: {e}")
+
+            lines = content.splitlines()
+
+            # Find the top-level homeassistant key node.
+            ha_key_node: Optional[yaml.ScalarNode] = None
+            ha_val_node: Optional[yaml.Node] = None
+            if isinstance(root_node, yaml.MappingNode):
+                for key_node, val_node in root_node.value:
+                    if isinstance(key_node, yaml.ScalarNode) and key_node.value == "homeassistant":
+                        ha_key_node = key_node
+                        ha_val_node = val_node
+                        break
+
+            if ha_key_node is not None:
+                if isinstance(ha_val_node, yaml.MappingNode):
+                    if ha_val_node.flow_style:
+                        raise PersistentEntityError(
+                            "Cannot append persistent entities: 'homeassistant' is a flow-style mapping in configuration.yaml. "
+                            "Please convert it to a block mapping before using ha_persistent_entities_path."
+                        )
+                    # Inline block mapping — patch packages within this content.
+                    new_content = self._patch_packages_in_mapping(content, ha_val_node, entities_filename)
+                    if new_content is None:
+                        return
+                elif isinstance(ha_val_node, yaml.ScalarNode) and ha_val_node.tag == "!include":
+                    # homeassistant is delegated to an included file — patch that file instead.
+                    include_path = Path(ha_val_node.value)
+                    if include_path.is_absolute():
+                        raise PersistentEntityError(
+                            "Cannot append persistent entities: 'homeassistant: !include' must use a relative path inside the staged "
+                            "Home Assistant configuration. Absolute include paths are not supported."
+                        )
+                    staged_root_abs = staged_config_root.resolve()
+                    include_file = (staged_config_root / include_path).resolve()
+                    if not include_file.is_relative_to(staged_root_abs):
+                        raise PersistentEntityError(
+                            "Cannot append persistent entities: 'homeassistant: !include' resolves outside the staged Home Assistant "
+                            "configuration directory. Please use an include path within the staged config."
+                        )
+                    self._patch_homeassistant_include_file(include_file, entities_filename)
+                    return
+                elif isinstance(ha_val_node, yaml.ScalarNode) and ha_val_node.tag == "tag:yaml.org,2002:null":
+                    # homeassistant: with no value — insert packages block after the key line.
+                    ha_indent: int = ha_key_node.start_mark.column
+                    child_col = ha_indent + 2
+                    insert_at = ha_key_node.start_mark.line + 1
+                    lines.insert(insert_at, f"{' ' * child_col}packages:")
+                    lines.insert(insert_at + 1, f"{' ' * (child_col + 2)}test_harness: !include {entities_filename}")
+                    new_content = "\n".join(lines).rstrip() + "\n"
+                else:
+                    raise PersistentEntityError(
+                        "Cannot append persistent entities: 'homeassistant' must be a block mapping in configuration.yaml. "
+                        "Please convert it to a block mapping before using ha_persistent_entities_path."
+                    )
+            else:
+                # No homeassistant key — append a minimal homeassistant.packages block.
+                new_content = content.rstrip() + f"\n\n# Harness: Include persistent entities package\nhomeassistant:\n  packages:\n    test_harness: !include {entities_filename}\n"
+
+            with open(config_file, "w") as f:
+                f.write(new_content)
+
+            logger.debug(f"Patched configuration.yaml with homeassistant.packages.test_harness for {entities_filename}")
+        except PersistentEntityError:
+            raise
+        except OSError as e:
+            raise PersistentEntityError(f"Failed to patch configuration.yaml with persistent entities: {e}")
+
+    @staticmethod
+    def _block_end_line(node: yaml.Node) -> int:
+        """Return the line index at which to insert content after a YAML block node."""
+        end_line: int = node.end_mark.line
+        end_col: int = node.end_mark.column
+        return end_line if end_col == 0 else end_line + 1
+
+    def _patch_packages_in_mapping(self, content: str, ha_mapping_node: yaml.MappingNode, entities_filename: str) -> Optional[str]:
+        """Find and patch the packages key in a homeassistant block mapping.
+
+        Handles all packages value forms: null/empty (inserts entry), block mapping
+        (appends entry), flow-style mapping (rewrites to block then appends).
+
+        Args:
+            content: Text of the file containing ha_mapping_node.
+            ha_mapping_node: The MappingNode that is the homeassistant block body.
+            entities_filename: Name of the entities file to include.
+
+        Returns:
+            Patched content string, or None if test_harness is already present.
+
+        Raises:
+            PersistentEntityError: If packages has an unsupported structure.
+        """
+        if f"test_harness: !include {entities_filename}" in content:
+            return None
+
+        lines = content.splitlines()
+
+        # Find the packages key in the mapping.
+        pkg_key_node: Optional[yaml.ScalarNode] = None
+        pkg_val_node: Optional[yaml.Node] = None
+        for key_node, val_node in ha_mapping_node.value:
+            if isinstance(key_node, yaml.ScalarNode) and key_node.value == "packages":
+                pkg_key_node = key_node
+                pkg_val_node = val_node
+                break
+
+        if pkg_key_node is None:
+            # No packages key — derive child indentation from existing children, or default to parent col+2.
+            child_col = ha_mapping_node.value[0][0].start_mark.column if ha_mapping_node.value else ha_mapping_node.start_mark.column + 2
+            insert_at = self._block_end_line(ha_mapping_node)
+            lines.insert(insert_at, f"{' ' * child_col}packages:")
+            lines.insert(insert_at + 1, f"{' ' * (child_col + 2)}test_harness: !include {entities_filename}")
+        elif isinstance(pkg_val_node, yaml.MappingNode):
+            if pkg_val_node.flow_style:
+                # Rewrite the single-line flow mapping to block style.
+                for key_node, _ in pkg_val_node.value:
+                    if isinstance(key_node, yaml.ScalarNode) and key_node.value == "test_harness":
+                        return None
+                pkg_col: int = pkg_key_node.start_mark.column
+                pkg_child_col_flow: int = pkg_col + 2
+                block_lines = [f"{' ' * pkg_col}packages:"]
+                for key_node, val_node in pkg_val_node.value:
+                    # Reconstruct each entry verbatim from the source (preserves tags like !include).
+                    start_idx: int = key_node.start_mark.index
+                    end_idx: int = val_node.end_mark.index
+                    entry_text = content[start_idx:end_idx]
+                    block_lines.append(f"{' ' * pkg_child_col_flow}{entry_text}")
+                block_lines.append(f"{' ' * pkg_child_col_flow}test_harness: !include {entities_filename}")
+                pkg_line: int = pkg_key_node.start_mark.line
+                pkg_end_line_plus1: int = pkg_val_node.end_mark.line + 1
+                lines[pkg_line:pkg_end_line_plus1] = block_lines
+            else:
+                # Block mapping — derive test_harness indent from first existing entry, or fallback.
+                pkg_child_col: int = pkg_val_node.value[0][0].start_mark.column if pkg_val_node.value else pkg_key_node.start_mark.column + 2
+                for key_node, _ in pkg_val_node.value:
+                    if isinstance(key_node, yaml.ScalarNode) and key_node.value == "test_harness":
+                        return None
+                lines.insert(
+                    self._block_end_line(pkg_val_node),
+                    f"{' ' * pkg_child_col}test_harness: !include {entities_filename}",
+                )
+        elif isinstance(pkg_val_node, yaml.ScalarNode) and pkg_val_node.tag == "tag:yaml.org,2002:null":
+            # packages: is present but empty — insert test_harness after the packages: line.
+            lines.insert(
+                pkg_key_node.start_mark.line + 1,
+                f"{' ' * (pkg_key_node.start_mark.column + 2)}test_harness: !include {entities_filename}",
+            )
+        else:
+            raise PersistentEntityError(
+                "Cannot append persistent entities: existing 'homeassistant.packages' is not a block mapping. " "Please convert it to a block mapping before using ha_persistent_entities_path."
+            )
+
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _patch_homeassistant_include_file(self, include_file: Path, entities_filename: str) -> None:
+        """Patch a homeassistant !include file to add packages.test_harness.
+
+        When configuration.yaml uses `homeassistant: !include <file>`, the included
+        file contains the homeassistant block body. This method patches that file to
+        ensure `packages.test_harness` is present.
+
+        Args:
+            include_file: Path to the included homeassistant configuration file.
+            entities_filename: Name of the entities file to include.
+
+        Raises:
+            PersistentEntityError: If the file cannot be read, parsed, or patched.
+        """
+        try:
+            with open(include_file, "r") as f:
+                content = f.read()
+
+            if f"test_harness: !include {entities_filename}" in content:
+                logger.debug(f"{include_file.name} already includes homeassistant.packages.test_harness")
+                return
+
+            try:
+                root_node = yaml.compose(content, Loader=yaml.SafeLoader)
+            except yaml.YAMLError as e:
+                raise PersistentEntityError(f"Failed to parse homeassistant include file {include_file.name}: {e}")
+
+            if not isinstance(root_node, yaml.MappingNode) or root_node.flow_style:
+                raise PersistentEntityError(
+                    f"Cannot append persistent entities: homeassistant include file '{include_file.name}' "
+                    "must have a block mapping at root level. "
+                    "Please convert it to a block mapping before using ha_persistent_entities_path."
+                )
+
+            new_content = self._patch_packages_in_mapping(content, root_node, entities_filename)
+            if new_content is None:
+                return
+
+            with open(include_file, "w") as f:
+                f.write(new_content)
+
+            logger.debug(f"Patched {include_file.name} with homeassistant.packages.test_harness for {entities_filename}")
+        except PersistentEntityError:
+            raise
+        except OSError as e:
+            raise PersistentEntityError(f"Failed to patch homeassistant include file {include_file.name}: {e}")
 
     def _detect_ha_config_root(self) -> Path:
         """Detect the Home Assistant configuration root directory.
@@ -179,15 +529,25 @@ class DockerComposeManager:
         - Starts AppDaemon on localhost:5050
         - Waits for AppDaemon to be healthy (via healthcheck)
 
+        If persistent entities are configured, stages the Home Assistant config
+        directory with the entities overlay before starting containers.
+
         Raises:
             DockerError: If the docker compose command fails or if the services
                 fail to start properly.
+            PersistentEntityError: If persistent entity configuration fails.
         """
         logger.debug("Starting docker-compose test environment...")
         try:
+            # Stage config with persistent entities if provided
+            if self._persistent_entities_path:
+                config_root = self._stage_ha_config_with_entities()
+            else:
+                config_root = self._ha_config_root
+
             # Set environment variables for docker-compose to mount the configuration directories
             env = os.environ.copy()
-            env["HA_CONFIG_ROOT"] = str(self._ha_config_root)
+            env["HA_CONFIG_ROOT"] = str(config_root)
             env["APPDAEMON_CONFIG_ROOT"] = str(self._appdaemon_config_root)
 
             subprocess.run(
@@ -239,29 +599,36 @@ class DockerComposeManager:
         """
         if not self._containers:
             logger.debug("Containers already stopped, skipping")
-            return
+        else:
+            logger.debug("Stopping docker-compose test environment...")
+            try:
+                subprocess.run(
+                    ["docker", "compose", "-p", self._run_id, "down", "-v"],
+                    cwd=self._containers_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                logger.debug("Docker-compose environment stopped successfully")
+            except subprocess.CalledProcessError as e:
+                error_msg = f"Failed to stop docker-compose environment (project: {self._run_id}): {e}"
+                if e.stderr:
+                    error_msg += f"\nStderr:\n{e.stderr}"
+                if e.stdout:
+                    error_msg += f"\nStdout:\n{e.stdout}"
+                logger.warning(error_msg)
+            except FileNotFoundError:
+                logger.warning("'docker' command not found. Ensure Docker is installed and available in PATH.")
+            finally:
+                self._containers.clear()
 
-        logger.debug("Stopping docker-compose test environment...")
-        try:
-            subprocess.run(
-                ["docker", "compose", "-p", self._run_id, "down", "-v"],
-                cwd=self._containers_dir,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            logger.debug("Docker-compose environment stopped successfully")
-        except subprocess.CalledProcessError as e:
-            error_msg = f"Failed to stop docker-compose environment (project: {self._run_id}): {e}"
-            if e.stderr:
-                error_msg += f"\nStderr:\n{e.stderr}"
-            if e.stdout:
-                error_msg += f"\nStdout:\n{e.stdout}"
-            logger.warning(error_msg)
-        except FileNotFoundError:
-            logger.warning("'docker' command not found. Ensure Docker is installed and available in PATH.")
-        finally:
-            self._containers.clear()
+        # Clean up staged config directory if it was created
+        if self._staged_ha_config_root and self._staged_ha_config_root.exists():
+            logger.debug(f"Cleaning up staged config directory: {self._staged_ha_config_root}")
+            try:
+                shutil.rmtree(self._staged_ha_config_root, ignore_errors=False)
+            except Exception as e:
+                logger.warning(f"Failed to clean up staged config directory: {e}")
 
     def get_container_diagnostics(self) -> str:
         """Dump logs from all containers for diagnostic purposes.

@@ -63,3 +63,15 @@ class TimeMachineError(IntegrationTestError):
     """
 
     pass
+
+
+class PersistentEntityError(IntegrationTestError):
+    """Exception raised when persistent entity registration fails.
+
+    This includes failures in:
+    - Loading or parsing persistent entities YAML file
+    - Validating persistent entity definitions
+    - Staging configuration directories before container startup
+    """
+
+    pass

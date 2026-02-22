@@ -1,7 +1,8 @@
 """Pytest configuration and fixtures for integration tests."""
 
 import logging
-from typing import Any, Generator
+from pathlib import Path
+from typing import Any, Generator, Optional
 
 import pytest
 
@@ -24,6 +25,20 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> 
             item.session._test_failure_detected = True
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Register custom pytest configuration options for the harness.
+
+    Adds the 'ha_persistent_entities_path' config key to allow test suites
+    to specify a YAML file containing persistent entity definitions
+    that should be registered with Home Assistant during container startup.
+    """
+    parser.addini(
+        "ha_persistent_entities_path",
+        "Path to YAML file containing persistent Home Assistant entities (relative to pytest config file)",
+        default=None,
+    )
+
+
 @pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
 def docker(request: pytest.FixtureRequest) -> Generator[DockerComposeManager, None, None]:
     """Provide Docker Compose manager for integration tests.
@@ -32,33 +47,59 @@ def docker(request: pytest.FixtureRequest) -> Generator[DockerComposeManager, No
     managing their lifecycle for the entire test session (scope="session") to avoid
     the overhead of repeatedly starting and stopping containers.
 
+    Persistent entities can be registered during container startup by providing
+    a YAML file path via the 'ha_persistent_entities_path' pytest configuration option.
+
     The containers are automatically cleaned up after all tests in the session complete.
+
+    Args:
+        request: The pytest request object for accessing configuration options.
 
     Yields:
         DockerComposeManager: Manager for Docker container lifecycle and file operations.
     """
     global _diagnostics_captured
-    manager = DockerComposeManager()
+
+    # Get persistent entities path from pytest configuration if provided
+    persistent_entities_path = request.config.getini("ha_persistent_entities_path")
+
+    # Resolve relative paths against the active pytest config file directory
+    if persistent_entities_path:
+        entities_path = Path(str(persistent_entities_path))
+        if not entities_path.is_absolute():
+            inipath = getattr(request.config, "inipath", None)
+            if inipath is None:
+                raise pytest.UsageError(
+                    "ha_persistent_entities_path is a relative path, but no pytest config file (e.g. pytest.ini, pyproject.toml) was found. "
+                    "Either use an absolute path or run pytest from a directory containing a config file."
+                )
+            entities_path = Path(str(inipath)).parent / entities_path
+        persistent_entities_path = str(entities_path)
+
+    manager: Optional[DockerComposeManager] = None
     try:
+        manager = DockerComposeManager(persistent_entities_path=persistent_entities_path)
         manager.start()
         logger.info("Docker containers started successfully")
         yield manager
     except Exception:
-        logger.warning(f"Container startup failed\n{manager.get_container_diagnostics()}")
+        diag = manager.get_container_diagnostics() if manager is not None else ""
+        logger.warning(f"Container startup failed\n{diag}")
         _diagnostics_captured = True
         raise
     finally:
-        # Capture diagnostics if any failures detected
-        test_failures = request.session.testsfailed > 0
-        hook_failures = getattr(request.session, "_test_failure_detected", False)
-        container_failure = not manager.containers_healthy()
+        if manager is not None:
+            # Capture diagnostics if any failures detected
+            test_failures = request.session.testsfailed > 0
+            hook_failures = getattr(request.session, "_test_failure_detected", False)
+            container_failure = not manager.containers_healthy()
 
-        if (test_failures or hook_failures or container_failure) and not _diagnostics_captured:
-            logger.warning(manager.get_container_diagnostics())
-            _diagnostics_captured = True
+            if (test_failures or hook_failures or container_failure) and not _diagnostics_captured:
+                logger.warning(manager.get_container_diagnostics())
+                _diagnostics_captured = True
 
-        logger.info("Tearing down Docker containers")
-        manager.stop()
+            logger.info("Tearing down Docker containers")
+            manager.stop()
 
 
 @pytest.fixture(scope="session")  # type: ignore[untyped-decorator]

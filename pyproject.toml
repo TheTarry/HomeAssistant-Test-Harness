@@ -27,6 +27,7 @@ classifiers = [
 dependencies = [
     "requests>=2.31.0",
     "python-dateutil>=2.8.0",
+    "PyYAML>=6.0.0",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +39,7 @@ dev = [
     "isort>=5.12.0",
     "flake8>=6.0.0",
     "types-requests>=2.31.0",
+    "types-PyYAML>=6.0.0",
     "build>=1.0.0",
 ]
 
@@ -66,6 +68,7 @@ testpaths = ["examples"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+ha_persistent_entities_path = "examples/persistent_entities.yaml"
 
 [tool.black]
 line-length = 200
