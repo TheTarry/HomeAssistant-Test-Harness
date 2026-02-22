@@ -389,12 +389,14 @@ class DockerComposeManager:
                 block_lines = [f"{' ' * pkg_col}packages:"]
                 for key_node, val_node in pkg_val_node.value:
                     # Reconstruct each entry verbatim from the source (preserves tags like !include).
-                    entry_text = content[key_node.start_mark.index : val_node.end_mark.index]
+                    start_idx: int = key_node.start_mark.index
+                    end_idx: int = val_node.end_mark.index
+                    entry_text = content[start_idx:end_idx]
                     block_lines.append(f"{' ' * pkg_child_col_flow}{entry_text}")
                 block_lines.append(f"{' ' * pkg_child_col_flow}test_harness: !include {entities_filename}")
                 pkg_line: int = pkg_key_node.start_mark.line
-                pkg_end_line: int = pkg_val_node.end_mark.line
-                lines[pkg_line : pkg_end_line + 1] = block_lines
+                pkg_end_line_plus1: int = pkg_val_node.end_mark.line + 1
+                lines[pkg_line:pkg_end_line_plus1] = block_lines
             else:
                 # Block mapping — derive test_harness indent from first existing entry, or fallback.
                 pkg_child_col: int = pkg_val_node.value[0][0].start_mark.column if pkg_val_node.value else pkg_key_node.start_mark.column + 2
