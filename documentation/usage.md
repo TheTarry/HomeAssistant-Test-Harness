@@ -257,13 +257,19 @@ ha_persistent_entities_path = "persistent_entities.yaml"
 
 Define entities by domain using standard [Home Assistant Packages](https://www.home-assistant.io/docs/configuration/packages/) structure.
 Any domain/entity configuration that Home Assistant supports can be included. During startup,
-the test harness patches your `configuration.yaml` to add:
+the test harness copies your persistent entities file into a staged configuration directory under a
+unique generated filename (e.g. `_harness_persistent_entities_<uuid>.yaml`), then patches
+`configuration.yaml` in that staged directory to reference the generated filename:
 
 ```yaml
 homeassistant:
   packages:
-    test_harness: !include persistent_entities.yaml
+    test_harness: !include _harness_persistent_entities_<uuid>.yaml
 ```
+
+The `!include` path in `configuration.yaml` will reference the staged filename, **not** the original basename
+you specified in `ha_persistent_entities_path`. This is expected behavior - if you inspect the staged
+`configuration.yaml` while troubleshooting, you will see the generated name rather than your original filename.
 
 This keeps your existing configuration intact while loading persistent entities from a separate file.
 
@@ -274,9 +280,10 @@ When `ha_persistent_entities_path` is configured:
 1. **At initialization**: The harness validates the YAML file
 2. **At container startup**:
   - Creates a temporary copy of your Home Assistant configuration directory
-  - Copies the persistent entities YAML file into the staged config
-  - Patches `configuration.yaml` to append `homeassistant.packages.test_harness`
-    pointing to the persistent entities file via `!include`
+  - Copies the persistent entities YAML file into the staged config under a unique generated name
+    (e.g. `_harness_persistent_entities_<uuid>.yaml`) to avoid conflicts with any existing files
+  - Patches `configuration.yaml` in the staged config to append `homeassistant.packages.test_harness`
+    with an `!include` pointing to the generated filename
   - Starts Home Assistant with the staged configuration
 3. **Your original config is never modified** - staging ensures isolation
 4. **Entities are registered during HA startup**, so all domain services are properly initialized
