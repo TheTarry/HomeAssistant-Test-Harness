@@ -212,7 +212,7 @@ class DockerComposeManager:
                 dst = staging_dir / item.name
                 if src.is_dir():
                     shutil.copytree(src, dst, symlinks=False, ignore=shutil.ignore_patterns("__pycache__", ".storage"))
-                elif item.name != ".storage":
+                else:
                     shutil.copy2(src, dst)
 
             # Copy persistent entities YAML file into staged config root with a unique name
