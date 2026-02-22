@@ -257,13 +257,13 @@ class DockerComposeManager:
             PersistentEntityError: If patching fails.
         """
         config_file = staged_config_root / "configuration.yaml"
-        include_line = f"    test_harness: !include {entities_filename}"
 
         try:
             with open(config_file, "r") as f:
                 content = f.read()
 
-            if include_line in content:
+            # Quick check: if the entry is already present, skip parsing.
+            if f"test_harness: !include {entities_filename}" in content:
                 logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
                 return
 
@@ -288,7 +288,28 @@ class DockerComposeManager:
                         break
 
             if ha_key_node is not None:
-                # Find the packages key within homeassistant.
+                # homeassistant must be a block mapping (or empty/null scalar) to be patchable.
+                if isinstance(ha_val_node, yaml.MappingNode):
+                    if ha_val_node.flow_style:
+                        raise PersistentEntityError(
+                            "Cannot append persistent entities: 'homeassistant' is a flow-style mapping in configuration.yaml. "
+                            "Please convert it to a block mapping before using ha_persistent_entities_path."
+                        )
+                elif not (isinstance(ha_val_node, yaml.ScalarNode) and ha_val_node.tag == "tag:yaml.org,2002:null"):
+                    raise PersistentEntityError(
+                        "Cannot append persistent entities: 'homeassistant' must be a block mapping in configuration.yaml. "
+                        "Please convert it to a block mapping before using ha_persistent_entities_path."
+                    )
+
+                # Derive indentation for direct children of homeassistant from the first
+                # existing child key, or default to ha_key_column + 2.
+                ha_indent: int = ha_key_node.start_mark.column
+                if isinstance(ha_val_node, yaml.MappingNode) and ha_val_node.value:
+                    child_col: int = ha_val_node.value[0][0].start_mark.column
+                else:
+                    child_col = ha_indent + 2
+
+                # Find the packages key within the homeassistant block.
                 pkg_key_node: Optional[yaml.ScalarNode] = None
                 pkg_val_node: Optional[yaml.Node] = None
                 if isinstance(ha_val_node, yaml.MappingNode):
@@ -310,27 +331,40 @@ class DockerComposeManager:
                         insert_at = _block_end_line(ha_val_node)
                     else:
                         insert_at = ha_key_node.start_mark.line + 1
-                    lines.insert(insert_at, "  packages:")
-                    lines.insert(insert_at + 1, include_line)
+                    lines.insert(insert_at, f"{' ' * child_col}packages:")
+                    lines.insert(insert_at + 1, f"{' ' * (child_col + 2)}test_harness: !include {entities_filename}")
                 elif isinstance(pkg_val_node, yaml.MappingNode):
-                    # packages has existing entries — check for test_harness and append.
+                    if pkg_val_node.flow_style:
+                        raise PersistentEntityError(
+                            "Cannot append persistent entities: existing 'homeassistant.packages' is a flow-style mapping. "
+                            "Please convert it to a block mapping before using ha_persistent_entities_path."
+                        )
+                    # Derive test_harness indent from first existing package entry, or fallback.
+                    if pkg_val_node.value:
+                        pkg_child_col: int = pkg_val_node.value[0][0].start_mark.column
+                    else:
+                        pkg_child_col = pkg_key_node.start_mark.column + 2
+                    # Check if test_harness entry already exists.
                     for key_node, _ in pkg_val_node.value:
                         if isinstance(key_node, yaml.ScalarNode) and key_node.value == "test_harness":
                             logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
                             return
-                    lines.insert(_block_end_line(pkg_val_node), include_line)
+                    lines.insert(_block_end_line(pkg_val_node), f"{' ' * pkg_child_col}test_harness: !include {entities_filename}")
                 elif isinstance(pkg_val_node, yaml.ScalarNode) and pkg_val_node.tag == "tag:yaml.org,2002:null":
-                    # packages: is present but empty (null value) — insert after it.
-                    lines.insert(pkg_key_node.start_mark.line + 1, include_line)
+                    # packages: is present but empty — insert after the packages: line.
+                    lines.insert(
+                        pkg_key_node.start_mark.line + 1,
+                        f"{' ' * (pkg_key_node.start_mark.column + 2)}test_harness: !include {entities_filename}",
+                    )
                 else:
                     raise PersistentEntityError(
-                        "Cannot append persistent entities: existing 'homeassistant.packages' is not a mapping. " "Please convert it to a mapping before using ha_persistent_entities_path."
+                        "Cannot append persistent entities: existing 'homeassistant.packages' is not a block mapping. " "Please convert it to a block mapping before using ha_persistent_entities_path."
                     )
 
                 new_content = "\n".join(lines).rstrip() + "\n"
             else:
                 # No homeassistant key — append a minimal homeassistant.packages block.
-                new_content = content.rstrip() + "\n\n# Harness: Include persistent entities package\nhomeassistant:\n  packages:\n" + include_line + "\n"
+                new_content = content.rstrip() + f"\n\n# Harness: Include persistent entities package\nhomeassistant:\n  packages:\n    test_harness: !include {entities_filename}\n"
 
             with open(config_file, "w") as f:
                 f.write(new_content)
