@@ -23,6 +23,8 @@ repos:
           - requests
           - types-requests
           - types-python-dateutil
+          - PyYAML
+          - types-PyYAML
 
   # General
   - repo: https://github.com/markdownlint/markdownlint
