@@ -81,6 +81,7 @@ line_length = 200
 [tool.flake8]
 max-line-length = 200
 exclude = [".venv", "__pycache__", ".pytest_cache", ".mypy_cache", "*.egg-info", "build", "dist"]
+extend-ignore = ["E203"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -336,21 +336,35 @@ class DockerComposeManager:
                     lines.insert(insert_at + 1, f"{' ' * (child_col + 2)}test_harness: !include {entities_filename}")
                 elif isinstance(pkg_val_node, yaml.MappingNode):
                     if pkg_val_node.flow_style:
-                        raise PersistentEntityError(
-                            "Cannot append persistent entities: existing 'homeassistant.packages' is a flow-style mapping. "
-                            "Please convert it to a block mapping before using ha_persistent_entities_path."
-                        )
-                    # Derive test_harness indent from first existing package entry, or fallback.
-                    if pkg_val_node.value:
-                        pkg_child_col: int = pkg_val_node.value[0][0].start_mark.column
+                        # Rewrite the single-line flow mapping to block style.
+                        # Check if test_harness already exists.
+                        for key_node, _ in pkg_val_node.value:
+                            if isinstance(key_node, yaml.ScalarNode) and key_node.value == "test_harness":
+                                logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
+                                return
+                        pkg_col: int = pkg_key_node.start_mark.column
+                        pkg_child_col_flow: int = pkg_col + 2
+                        block_lines = [f"{' ' * pkg_col}packages:"]
+                        for key_node, val_node in pkg_val_node.value:
+                            # Reconstruct each entry verbatim from the source (preserves tags like !include).
+                            entry_text = content[key_node.start_mark.index : val_node.end_mark.index]
+                            block_lines.append(f"{' ' * pkg_child_col_flow}{entry_text}")
+                        block_lines.append(f"{' ' * pkg_child_col_flow}test_harness: !include {entities_filename}")
+                        pkg_line: int = pkg_key_node.start_mark.line
+                        pkg_end_line: int = pkg_val_node.end_mark.line
+                        lines[pkg_line : pkg_end_line + 1] = block_lines
                     else:
-                        pkg_child_col = pkg_key_node.start_mark.column + 2
-                    # Check if test_harness entry already exists.
-                    for key_node, _ in pkg_val_node.value:
-                        if isinstance(key_node, yaml.ScalarNode) and key_node.value == "test_harness":
-                            logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
-                            return
-                    lines.insert(_block_end_line(pkg_val_node), f"{' ' * pkg_child_col}test_harness: !include {entities_filename}")
+                        # Derive test_harness indent from first existing package entry, or fallback.
+                        if pkg_val_node.value:
+                            pkg_child_col: int = pkg_val_node.value[0][0].start_mark.column
+                        else:
+                            pkg_child_col = pkg_key_node.start_mark.column + 2
+                        # Check if test_harness entry already exists.
+                        for key_node, _ in pkg_val_node.value:
+                            if isinstance(key_node, yaml.ScalarNode) and key_node.value == "test_harness":
+                                logger.debug("configuration.yaml already includes homeassistant.packages.test_harness")
+                                return
+                        lines.insert(_block_end_line(pkg_val_node), f"{' ' * pkg_child_col}test_harness: !include {entities_filename}")
                 elif isinstance(pkg_val_node, yaml.ScalarNode) and pkg_val_node.tag == "tag:yaml.org,2002:null":
                     # packages: is present but empty — insert after the packages: line.
                     lines.insert(
