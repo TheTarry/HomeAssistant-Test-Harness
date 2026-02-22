@@ -179,7 +179,7 @@ class DockerComposeManager:
         # failures later, so fail fast with a clear error.
         if not isinstance(data, dict) or not data:
             raise PersistentEntityError(
-                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping " "suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
+                f"Persistent entities file {entity_file.absolute()} must contain a non-empty YAML mapping suitable for use as homeassistant.packages.<name> (got empty or non-mapping content)."
             )
         logger.info(f"Loaded persistent entities file: {entity_file.absolute()}")
         return entity_file.absolute()
@@ -208,6 +208,8 @@ class DockerComposeManager:
         try:
             # Copy original config to staging
             for item in self._ha_config_root.iterdir():
+                if item.name in (".storage", "__pycache__"):
+                    continue
                 src = self._ha_config_root / item.name
                 dst = staging_dir / item.name
                 if src.is_dir():
@@ -292,8 +294,7 @@ class DockerComposeManager:
                 if isinstance(ha_val_node, yaml.MappingNode):
                     if ha_val_node.flow_style:
                         raise PersistentEntityError(
-                            "Cannot append persistent entities: 'homeassistant' is a flow-style mapping in configuration.yaml. "
-                            "Please convert it to a block mapping before using ha_persistent_entities_path."
+                            "Cannot append persistent entities: existing 'homeassistant.packages' is not a mapping. Please convert it to a mapping before using ha_persistent_entities_path."
                         )
                 elif not (isinstance(ha_val_node, yaml.ScalarNode) and ha_val_node.tag == "tag:yaml.org,2002:null"):
                     raise PersistentEntityError(
