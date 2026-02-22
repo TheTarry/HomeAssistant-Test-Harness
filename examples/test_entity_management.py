@@ -105,6 +105,8 @@ def test_persistent_entities_available_with_expected_initial_state(home_assistan
     home_assistant.assert_entity_state("input_number.target_temperature", "20.0")
     home_assistant.assert_entity_state("input_select.house_mode", "Home")
     home_assistant.assert_entity_state("counter.doorbell_presses", "0")
+    home_assistant.assert_entity_state("light.living_room_lamp", "off")
+    home_assistant.assert_entity_state("switch.garage_door", "off")
 
     guest_mode = home_assistant.get_state("input_boolean.guest_mode")
     assert guest_mode["attributes"]["icon"] == "mdi:account-group"

@@ -224,12 +224,26 @@ input_number:
     max: 30
 
 light:
-  bedroom:
-    name: "Bedroom Light"
+  - platform: template
+    lights:
+      living_room_lamp:
+        friendly_name: "Living Room Lamp"
+        value_template: "{{ is_state('light.living_room_lamp', 'on') }}"
+        turn_on:
+          - stop: "Turning on light"
+        turn_off:
+          - stop: "Turning off light"
 
 switch:
-  garage_door:
-    name: "Garage Door"
+  - platform: template
+    switches:
+      garage_door:
+        friendly_name: "Garage Door"
+        value_template: "{{ is_state('switch.garage_door', 'on') }}"
+        turn_on:
+          - stop: "Switch turned on"
+        turn_off:
+          - stop: "Switch turned off"
 ```
 
 Then reference the YAML file in your pytest configuration:
