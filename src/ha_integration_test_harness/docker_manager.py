@@ -311,9 +311,9 @@ class DockerComposeManager:
                             "Cannot append persistent entities: 'homeassistant: !include' must use a relative path inside the staged "
                             "Home Assistant configuration. Absolute include paths are not supported."
                         )
-                    staged_root_abs = Path(os.path.abspath(str(staged_config_root)))
-                    include_file = Path(os.path.abspath(os.path.join(str(staged_config_root), str(include_path))))
-                    if include_file != staged_root_abs and staged_root_abs not in include_file.parents:
+                    staged_root_abs = staged_config_root.resolve()
+                    include_file = (staged_config_root / include_path).resolve()
+                    if staged_root_abs not in include_file.parents:
                         raise PersistentEntityError(
                             "Cannot append persistent entities: 'homeassistant: !include' resolves outside the staged Home Assistant "
                             "configuration directory. Please use an include path within the staged config."
