@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any, Generator, Optional
 
 import pytest
 
@@ -68,31 +68,38 @@ def docker(request: pytest.FixtureRequest) -> Generator[DockerComposeManager, No
         entities_path = Path(str(persistent_entities_path))
         if not entities_path.is_absolute():
             inipath = getattr(request.config, "inipath", None)
-            if inipath is not None:
-                entities_path = Path(str(inipath)).parent / entities_path
+            if inipath is None:
+                raise ValueError(
+                    "ha_persistent_entities_path is a relative path, but no pytest config file (e.g. pytest.ini, pyproject.toml) was found. "
+                    "Either use an absolute path or run pytest from a directory containing a config file."
+                )
+            entities_path = Path(str(inipath)).parent / entities_path
         persistent_entities_path = str(entities_path)
 
-    manager = DockerComposeManager(persistent_entities_path=persistent_entities_path)
+    manager: Optional[DockerComposeManager] = None
     try:
+        manager = DockerComposeManager(persistent_entities_path=persistent_entities_path)
         manager.start()
         logger.info("Docker containers started successfully")
         yield manager
     except Exception:
-        logger.warning(f"Container startup failed\n{manager.get_container_diagnostics()}")
+        diag = manager.get_container_diagnostics() if manager is not None else ""
+        logger.warning(f"Container startup failed\n{diag}")
         _diagnostics_captured = True
         raise
     finally:
-        # Capture diagnostics if any failures detected
-        test_failures = request.session.testsfailed > 0
-        hook_failures = getattr(request.session, "_test_failure_detected", False)
-        container_failure = not manager.containers_healthy()
+        if manager is not None:
+            # Capture diagnostics if any failures detected
+            test_failures = request.session.testsfailed > 0
+            hook_failures = getattr(request.session, "_test_failure_detected", False)
+            container_failure = not manager.containers_healthy()
 
-        if (test_failures or hook_failures or container_failure) and not _diagnostics_captured:
-            logger.warning(manager.get_container_diagnostics())
-            _diagnostics_captured = True
+            if (test_failures or hook_failures or container_failure) and not _diagnostics_captured:
+                logger.warning(manager.get_container_diagnostics())
+                _diagnostics_captured = True
 
-        logger.info("Tearing down Docker containers")
-        manager.stop()
+            logger.info("Tearing down Docker containers")
+            manager.stop()
 
 
 @pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
