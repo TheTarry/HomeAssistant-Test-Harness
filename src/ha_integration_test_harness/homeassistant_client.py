@@ -158,6 +158,25 @@ class HomeAssistant:
         except requests.RequestException as e:
             raise HomeAssistantClientError(f"Failed to remove entity {entity_id} from {url}: {e}")
 
+    def call_action(self, domain: str, action: str, data: Optional[dict[str, Any]] = None) -> None:
+        """Call a Home Assistant action (service).
+
+        Args:
+            domain: The domain of the action (e.g., 'light', 'switch', 'input_boolean').
+            action: The action to call (e.g., 'turn_on', 'turn_off', 'toggle').
+            data: Optional dictionary of action data (e.g., {'entity_id': 'light.living_room'}).
+
+        Raises:
+            HomeAssistantClientError: If the request fails due to network issues or API errors.
+        """
+        url = f"{self._base_url}/api/services/{domain}/{action}"
+        try:
+            headers = {"Authorization": f"Bearer {self._access_token}"}
+            response = requests.post(url, json=data or {}, headers=headers)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            raise HomeAssistantClientError(f"Failed to call action {domain}.{action} at {url}: {e}")
+
     def given_an_entity(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
         """Create an entity for testing purposes with automatic cleanup.
 

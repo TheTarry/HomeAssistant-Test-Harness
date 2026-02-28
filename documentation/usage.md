@@ -152,6 +152,59 @@ def test_scheduled_automation(home_assistant, time_machine):
     home_assistant.assert_entity_state("light.morning", "on", timeout=5)
 ```
 
+### Calling Actions
+
+Use `call_action()` to trigger Home Assistant actions (services) from your tests. This is the standard way to interact with entities in Home Assistant
+and should be preferred over `set_state()` in most cases:
+
+```python
+def test_turn_on_light_via_action(home_assistant):
+    """Test controlling a light via an action."""
+    home_assistant.call_action("light", "turn_on", {"entity_id": "light.living_room"})
+
+    home_assistant.assert_entity_state("light.living_room", "on", timeout=5)
+```
+
+#### Actions vs. `set_state()`: Template Entities
+
+For entities whose state is **derived from another entity** (e.g., a template `light` backed by an `input_boolean`), you **must** call the appropriate
+action rather than setting the state directly. Calling `set_state()` on the derived entity has no effect because Home Assistant recomputes its state from
+the source entity.
+
+For example, given this configuration:
+
+```yaml
+input_boolean:
+  state_living_room_floor_lamp:
+    name: "[State] Living Room Floor Lamp"
+
+light:
+  - platform: template
+    lights:
+      living_room_floor_lamp:
+        value_template: "{{ is_state('input_boolean.state_living_room_floor_lamp', 'on') }}"
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.state_living_room_floor_lamp
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.state_living_room_floor_lamp
+```
+
+**Wrong** — this has no effect because `light.living_room_floor_lamp` is computed from the input_boolean:
+
+```python
+home_assistant.set_state("light.living_room_floor_lamp", "on")  # ❌ Does nothing
+```
+
+**Correct** — call the action on the light entity, which triggers the underlying `input_boolean` update:
+
+```python
+home_assistant.call_action("light", "turn_on", {"entity_id": "light.living_room_floor_lamp"})  # ✅
+```
+
 ### Polling for State Changes
 
 ```python
