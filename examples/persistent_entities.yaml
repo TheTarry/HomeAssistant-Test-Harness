@@ -10,11 +10,12 @@ input_boolean:
     name: Guest Mode
     initial: false
     icon: mdi:account-group
-  # Backing state helpers for template entities below.
-  # Template entities whose value_template derives state from another entity require
-  # a separate helper to store and manage that state. The turn_on/turn_off actions
-  # on the template entity must update the helper so that the template reflects the
-  # change. Without a backing helper the turn_on/turn_off actions have no effect.
+  # Backing state helpers for the pseudo template entities defined below.
+  # In this test harness pattern, these helpers provide the persistent state that
+  # the template entities' value_template reads, and turn_on/turn_off are wired to
+  # update the helper so that the template reflects the change. Real template
+  # entities that derive state from other integrations/entities do not necessarily
+  # need a dedicated helper like this.
   state_study_light:
     name: "[State] Study Light"
     initial: false
