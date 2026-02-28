@@ -36,7 +36,7 @@ Home Assistant API client with automatic authentication and retry logic.
 ```python
 home_assistant.set_state(entity_id: str, state: str, attributes: dict = None) -> None
 home_assistant.get_state(entity_id: str) -> dict
-home_assistant.assert_entity_state(entity_id: str, expected_state: str = None, expected_attributes: dict = None, timeout: int = 5) -> None
+home_assistant.assert_entity_state(entity_id: str, expected_state: str | Callable[[str], bool] | None = None, expected_attributes: dict = None, timeout: int = 5) -> None
 home_assistant.remove_entity(entity_id: str) -> None
 home_assistant.given_an_entity(entity_id: str, state: str, attributes: dict = None) -> None
 home_assistant.clean_up_test_entities() -> None
@@ -89,7 +89,7 @@ Sets the state of an entity. Creates the entity if it doesn't exist.
 
 Returns entity state as a dictionary with `state`, `attributes`, `last_changed`, etc.
 
-#### `assert_entity_state(entity_id, expected_state=None, expected_attributes=None, timeout=10)`
+#### `assert_entity_state(entity_id, expected_state=None, expected_attributes=None, timeout=5)`
 
 Polls entity state and/or attributes until all conditions are met, or the timeout expires. Raises `AssertionError` if the timeout occurs.
 At least one of `expected_state` or `expected_attributes` must be provided.
@@ -97,7 +97,7 @@ At least one of `expected_state` or `expected_attributes` must be provided.
 - **entity_id**: Entity ID (e.g., `"switch.test"`)
 - **expected_state**: State value to match exactly (e.g., `"on"`), or a callable predicate that receives the current state string and returns `True` when satisfied.
   Pass `None` (or omit) to skip state checking.
-- **timeout**: Maximum seconds to wait (default: 10)
+- **timeout**: Maximum seconds to wait (default: 5)
 - **expected_attributes**: Optional dictionary of attribute names to expected values. Each value may be an exact value (compared with `==`) or a callable predicate
   that receives the actual attribute value and returns `True` when satisfied. Only the attributes listed here are checked; additional attributes on the entity are ignored.
 

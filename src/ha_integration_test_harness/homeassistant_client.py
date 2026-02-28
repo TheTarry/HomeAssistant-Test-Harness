@@ -79,10 +79,10 @@ class HomeAssistant:
             raise HomeAssistantClientError(f"Failed to get state for entity {entity_id} from {url}: {e}")
 
     @overload
-    def assert_entity_state(self, entity_id: str, expected_state: str, expected_attributes: None = None, timeout: int = 5) -> None: ...
+    def assert_entity_state(self, entity_id: str, expected_state: str, expected_attributes: Optional[dict[str, Any]] = None, timeout: int = 5) -> None: ...
 
     @overload
-    def assert_entity_state(self, entity_id: str, expected_state: Callable[[str], bool], expected_attributes: None = None, timeout: int = 5) -> None: ...
+    def assert_entity_state(self, entity_id: str, expected_state: Callable[[str], bool], expected_attributes: Optional[dict[str, Any]] = None, timeout: int = 5) -> None: ...
 
     @overload
     def assert_entity_state(self, entity_id: str, expected_state: None = None, expected_attributes: Optional[dict[str, Any]] = None, timeout: int = 5) -> None: ...
@@ -161,7 +161,16 @@ class HomeAssistant:
 
             if state_matches and attributes_match:
                 if last_state is not None:
-                    logger.debug(f"Entity {entity_id} reached expected conditions ({state_desc}) after {time.time() - start_time:.1f}s")
+                    if expected_state is not None:
+                        condition_desc = f"state {state_desc}"
+                        if expected_attributes is not None:
+                            condition_desc += " and expected attributes"
+                    elif expected_attributes is not None:
+                        attr_keys = ", ".join(sorted(expected_attributes.keys()))
+                        condition_desc = f"expected attributes ({attr_keys})"
+                    else:
+                        condition_desc = "expected conditions"
+                    logger.debug(f"Entity {entity_id} reached {condition_desc} after {time.time() - start_time:.1f}s")
                 return
 
             # Check timeout
@@ -171,8 +180,14 @@ class HomeAssistant:
                 if expected_state is not None and not state_matches:
                     failure_parts.append(f"state did not match {state_desc} (current: '{current_state}')")
                 if expected_attributes is not None and not attributes_match:
-                    attr_details = ", ".join(f"'{k}': {v!r}" for k, v in mismatched_attributes.items())
-                    failure_parts.append(f"attributes did not match (mismatched: {{{attr_details}}})")
+                    attr_details = []
+                    for k, v in mismatched_attributes.items():
+                        expected_val = expected_attributes[k]
+                        if callable(expected_val):
+                            attr_details.append(f"'{k}': predicate not satisfied (actual: {v!r})")
+                        else:
+                            attr_details.append(f"'{k}': expected {expected_val!r}, got {v!r}")
+                    failure_parts.append(f"attributes did not match ({'; '.join(attr_details)})")
                 raise AssertionError(f"Entity {entity_id} did not reach expected conditions within {timeout}s. " + "; ".join(failure_parts))
 
             last_state = current_state
