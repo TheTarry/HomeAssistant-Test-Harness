@@ -79,20 +79,20 @@ class HomeAssistant:
             raise HomeAssistantClientError(f"Failed to get state for entity {entity_id} from {url}: {e}")
 
     @overload
-    def assert_entity_state(self, entity_id: str, expected_state: str, timeout: int = 5, expected_attributes: None = None) -> None: ...
+    def assert_entity_state(self, entity_id: str, expected_state: str, expected_attributes: None = None, timeout: int = 5) -> None: ...
 
     @overload
-    def assert_entity_state(self, entity_id: str, expected_state: Callable[[str], bool], timeout: int = 5, expected_attributes: None = None) -> None: ...
+    def assert_entity_state(self, entity_id: str, expected_state: Callable[[str], bool], expected_attributes: None = None, timeout: int = 5) -> None: ...
 
     @overload
-    def assert_entity_state(self, entity_id: str, expected_state: None = None, timeout: int = 5, expected_attributes: Optional[dict[str, Any]] = None) -> None: ...
+    def assert_entity_state(self, entity_id: str, expected_state: None = None, expected_attributes: Optional[dict[str, Any]] = None, timeout: int = 5) -> None: ...
 
     def assert_entity_state(
         self,
         entity_id: str,
         expected_state: Union[str, Callable[[str], bool], None] = None,
-        timeout: int = 5,
         expected_attributes: Optional[dict[str, Any]] = None,
+        timeout: int = 5,
     ) -> None:
         """Assert that an entity is in the expected state and/or has the expected attributes.
 

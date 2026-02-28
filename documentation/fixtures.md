@@ -36,7 +36,7 @@ Home Assistant API client with automatic authentication and retry logic.
 ```python
 home_assistant.set_state(entity_id: str, state: str, attributes: dict = None) -> None
 home_assistant.get_state(entity_id: str) -> dict
-home_assistant.assert_entity_state(entity_id: str, expected_state: str = None, timeout: int = 10, expected_attributes: dict = None) -> None
+home_assistant.assert_entity_state(entity_id: str, expected_state: str = None, expected_attributes: dict = None, timeout: int = 10) -> None
 home_assistant.remove_entity(entity_id: str) -> None
 home_assistant.given_an_entity(entity_id: str, state: str, attributes: dict = None) -> None
 home_assistant.clean_up_test_entities() -> None
@@ -89,7 +89,7 @@ Sets the state of an entity. Creates the entity if it doesn't exist.
 
 Returns entity state as a dictionary with `state`, `attributes`, `last_changed`, etc.
 
-#### `assert_entity_state(entity_id, expected_state=None, timeout=10, expected_attributes=None)`
+#### `assert_entity_state(entity_id, expected_state=None, expected_attributes=None, timeout=10)`
 
 Polls entity state and/or attributes until all conditions are met, or the timeout expires. Raises `AssertionError` if the timeout occurs.
 At least one of `expected_state` or `expected_attributes` must be provided.
