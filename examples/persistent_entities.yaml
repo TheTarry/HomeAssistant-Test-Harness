@@ -10,8 +10,19 @@ input_boolean:
     name: Guest Mode
     initial: false
     icon: mdi:account-group
+  # Backing state helpers for template entities below.
+  # Template entities whose value_template derives state from another entity require
+  # a separate helper to store and manage that state. The turn_on/turn_off actions
+  # on the template entity must update the helper so that the template reflects the
+  # change. Without a backing helper the turn_on/turn_off actions have no effect.
   state_study_light:
     name: "[State] Study Light"
+    initial: false
+  state_living_room_lamp:
+    name: "[State] Living Room Lamp"
+    initial: false
+  state_garage_door:
+    name: "[State] Garage Door"
     initial: false
 
 input_number:
@@ -56,11 +67,15 @@ light:
     lights:
       living_room_lamp:
         friendly_name: "Living Room Lamp"
-        value_template: "{{ is_state('light.living_room_lamp', 'on') }}"
+        value_template: "{{ is_state('input_boolean.state_living_room_lamp', 'on') }}"
         turn_on:
-          - stop: "Turning on light"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.state_living_room_lamp
         turn_off:
-          - stop: "Turning off light"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.state_living_room_lamp
       study_light:
         friendly_name: "Study Light"
         value_template: "{{ is_state('input_boolean.state_study_light', 'on') }}"
@@ -78,8 +93,12 @@ switch:
     switches:
       garage_door:
         friendly_name: "Garage Door"
-        value_template: "{{ is_state('switch.garage_door', 'on') }}"
+        value_template: "{{ is_state('input_boolean.state_garage_door', 'on') }}"
         turn_on:
-          - stop: "Switch turned on"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.state_garage_door
         turn_off:
-          - stop: "Switch turned off"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.state_garage_door
