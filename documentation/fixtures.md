@@ -40,7 +40,6 @@ home_assistant.assert_entity_state(entity_id: str, expected_state: str, timeout:
 home_assistant.remove_entity(entity_id: str) -> None
 home_assistant.given_an_entity(entity_id: str, state: str, attributes: dict = None) -> None
 home_assistant.clean_up_test_entities() -> None
-home_assistant.regenerate_access_token() -> None
 home_assistant.call_action(domain: str, action: str, data: dict = None) -> None
 ```
 
@@ -128,10 +127,6 @@ def test_automation(home_assistant):
 Removes all entities created via `given_an_entity()`. This method is called automatically by the test harness after each test function, so you typically don't need to call it manually.
 
 If cleanup fails for some entities, all tracked entities are still removed from tracking, and errors are reported collectively.
-
-#### `regenerate_access_token()`
-
-Generates a new access token. Called automatically after time manipulation.
 
 #### `call_action(domain, action, data=None)`
 
