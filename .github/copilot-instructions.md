@@ -79,6 +79,20 @@ ha_integration_test_harness = "ha_integration_test_harness.conftest"
 
 This makes fixtures (`docker`, `home_assistant`, `app_daemon`, `time_machine`) automatically available to tests.
 
+### Calling Actions (Services)
+
+Use `call_action(domain, action, data=None)` to trigger Home Assistant actions. This is the preferred way to interact with entities because it goes through the proper Home Assistant service pipeline:
+
+```python
+home_assistant.call_action("light", "turn_on", {"entity_id": "light.living_room"})
+home_assistant.call_action("input_boolean", "turn_on", {"entity_id": "input_boolean.guest_mode"})
+```
+
+**Important:** For template entities whose state is computed from another entity (e.g. a template `light` whose `value_template` reads from an `input_boolean`),
+you **must** use `call_action()` — not `set_state()`.
+Calling `set_state()` on the template entity has no effect because Home Assistant recomputes its state from the source entity.
+Only `call_action()` triggers the underlying action scripts that update the source entity.
+
 ### Automatic Entity Cleanup
 
 The `home_assistant` fixture provides automatic cleanup for test entities:
@@ -242,6 +256,8 @@ time_machine.advance_to_preset("sunrise", timedelta(minutes=30))
 - **Environment-based configuration**: Use env vars for flexible directory paths
 - **Type safety**: Use type hints throughout
 - **Forward-only time**: Always advance time forward; document that backward time travel is not supported
+- **Prefer `call_action()` over `set_state()`**: Use `call_action()` to interact with entities wherever possible; reserve `set_state()` for directly
+  setting raw state values on entities that are not backed by other entities (e.g. sensors or simple input helpers)
 
 ## Resources
 
