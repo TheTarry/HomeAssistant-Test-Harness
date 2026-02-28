@@ -79,30 +79,47 @@ class HomeAssistant:
             raise HomeAssistantClientError(f"Failed to get state for entity {entity_id} from {url}: {e}")
 
     @overload
-    def assert_entity_state(self, entity_id: str, expected_state: str, timeout: int = 5) -> None: ...
+    def assert_entity_state(self, entity_id: str, expected_state: str, expected_attributes: Optional[dict[str, Any]] = None, timeout: int = 5) -> None: ...
 
     @overload
-    def assert_entity_state(self, entity_id: str, expected_state: Callable[[str], bool], timeout: int = 5) -> None: ...
+    def assert_entity_state(self, entity_id: str, expected_state: Callable[[str], bool], expected_attributes: Optional[dict[str, Any]] = None, timeout: int = 5) -> None: ...
 
-    def assert_entity_state(self, entity_id: str, expected_state: Union[str, Callable[[str], bool]], timeout: int = 5) -> None:
-        """Assert that an entity is in the expected state.
+    @overload
+    def assert_entity_state(self, entity_id: str, expected_state: None = None, expected_attributes: Optional[dict[str, Any]] = None, timeout: int = 5) -> None: ...
 
-        Polls the entity state every second until it matches the expected state
-        or the timeout is reached.
+    def assert_entity_state(
+        self,
+        entity_id: str,
+        expected_state: Union[str, Callable[[str], bool], None] = None,
+        expected_attributes: Optional[dict[str, Any]] = None,
+        timeout: int = 5,
+    ) -> None:
+        """Assert that an entity is in the expected state and/or has the expected attributes.
+
+        Polls the entity state every second until all conditions are met or the timeout is reached.
+        At least one of ``expected_state`` or ``expected_attributes`` must be provided.
 
         Args:
             entity_id: The entity ID to check (e.g., "light.foobar").
-            expected_state: Either a string for exact match, or a callable that
-                takes the current state string and returns True when satisfied.
+            expected_state: Either a string for exact match, or a callable that takes the current
+                state string and returns True when satisfied. Pass None (or omit) to skip state checking.
             timeout: Maximum time to wait in seconds (default: 5).
+            expected_attributes: Optional dictionary of attribute name to expected value. Each value
+                may be an exact value (compared with ``==``) or a callable predicate that takes the
+                actual attribute value and returns True when satisfied. Only the attributes listed here
+                are checked; any additional attributes on the entity are ignored.
 
         Raises:
-            AssertionError: If the entity's state does not match the expected state
-                within the timeout period, or if the entity is not found.
+            ValueError: If neither ``expected_state`` nor ``expected_attributes`` is provided.
+            AssertionError: If the entity is not found, or if state/attributes do not match within
+                the timeout period.
         """
+        if expected_state is None and expected_attributes is None:
+            raise ValueError("At least one of expected_state or expected_attributes must be provided")
+
         start_time = time.time()
         last_state = None
-        expectation_desc = "predicate function" if callable(expected_state) else f"'{expected_state}'"
+        state_desc = "predicate function" if callable(expected_state) else f"'{expected_state}'"
 
         while True:
             state_response = self.get_state(entity_id)
@@ -110,31 +127,68 @@ class HomeAssistant:
             if state_response is None:
                 raise AssertionError(f"Entity {entity_id} not found")
 
-            # Extract the actual state value from the response
-            if isinstance(state_response, dict):
-                current_state = state_response.get("state")
-                if not isinstance(current_state, str):
-                    raise AssertionError(f"Entity {entity_id} has unexpected state value: {current_state}")
-            else:
+            if not isinstance(state_response, dict):
                 raise AssertionError(f"Unexpected state response format for entity {entity_id}: {state_response}")
 
-            # Check if state matches expectation
-            if callable(expected_state):
-                # Call the predicate function
-                matches = expected_state(current_state)
-            else:
-                # Exact match
-                matches = current_state == expected_state
+            # Extract the actual state value from the response
+            current_state = state_response.get("state")
+            if not isinstance(current_state, str):
+                raise AssertionError(f"Entity {entity_id} has unexpected state value: {current_state}")
 
-            if matches:
-                if last_state is not None and (callable(expected_state) or last_state != expected_state):
-                    logger.debug(f"Entity {entity_id} reached expected state ({expectation_desc}) after {time.time() - start_time:.1f}s")
+            # Check if state matches expectation
+            state_matches = True
+            if expected_state is not None:
+                if callable(expected_state):
+                    state_matches = expected_state(current_state)
+                else:
+                    state_matches = current_state == expected_state
+
+            # Check if attributes match expectation
+            attributes_match = True
+            mismatched_attributes: dict[str, Any] = {}
+            if expected_attributes is not None:
+                current_attributes = state_response.get("attributes", {})
+                for attr_name, attr_expected in expected_attributes.items():
+                    attr_actual = current_attributes.get(attr_name)
+                    if callable(attr_expected):
+                        if not attr_expected(attr_actual):
+                            attributes_match = False
+                            mismatched_attributes[attr_name] = attr_actual
+                    else:
+                        if attr_actual != attr_expected:
+                            attributes_match = False
+                            mismatched_attributes[attr_name] = attr_actual
+
+            if state_matches and attributes_match:
+                if last_state is not None:
+                    if expected_state is not None:
+                        condition_desc = f"state {state_desc}"
+                        if expected_attributes is not None:
+                            condition_desc += " and expected attributes"
+                    elif expected_attributes is not None:
+                        attr_keys = ", ".join(sorted(expected_attributes.keys()))
+                        condition_desc = f"expected attributes ({attr_keys})"
+                    else:
+                        condition_desc = "expected conditions"
+                    logger.debug(f"Entity {entity_id} reached {condition_desc} after {time.time() - start_time:.1f}s")
                 return
 
             # Check timeout
             elapsed = time.time() - start_time
             if elapsed >= timeout:
-                raise AssertionError(f"Entity {entity_id} did not reach expected state ({expectation_desc}) within {timeout}s. " f"Current state: '{current_state}'")
+                failure_parts = []
+                if expected_state is not None and not state_matches:
+                    failure_parts.append(f"state did not match {state_desc} (current: '{current_state}')")
+                if expected_attributes is not None and not attributes_match:
+                    attr_details = []
+                    for k, v in mismatched_attributes.items():
+                        expected_val = expected_attributes[k]
+                        if callable(expected_val):
+                            attr_details.append(f"'{k}': predicate not satisfied (actual: {v!r})")
+                        else:
+                            attr_details.append(f"'{k}': expected {expected_val!r}, got {v!r}")
+                    failure_parts.append(f"attributes did not match ({'; '.join(attr_details)})")
+                raise AssertionError(f"Entity {entity_id} did not reach expected conditions within {timeout}s. " + "; ".join(failure_parts))
 
             last_state = current_state
             time.sleep(1)

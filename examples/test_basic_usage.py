@@ -61,3 +61,39 @@ def test_polling_for_state_change(home_assistant: HomeAssistant) -> None:
 
     # Cleanup
     home_assistant.remove_entity("timer.test_timer")
+
+
+def test_assert_entity_state_with_exact_attribute_match(home_assistant: HomeAssistant) -> None:
+    """Test assert_entity_state with exact attribute matching.
+
+    Demonstrates use-cases 2 (state + attribute) and 3 (attribute only):
+    - Assert state and a specific attribute match simultaneously.
+    - Assert only an attribute, without checking state.
+    """
+    # Use-case 2: assert state AND attribute together
+    home_assistant.assert_entity_state("input_boolean.guest_mode", "off", expected_attributes={"icon": "mdi:account-group"})
+
+    # Use-case 3: assert attribute only (no state check)
+    home_assistant.assert_entity_state("input_select.house_mode", expected_attributes={"icon": "mdi:home"})
+
+    # Use-case 5: assert multiple attributes at once
+    home_assistant.assert_entity_state(
+        "input_number.target_temperature",
+        expected_attributes={"unit_of_measurement": "°C", "icon": "mdi:thermometer"},
+    )
+
+
+def test_assert_entity_state_with_predicate_attribute(home_assistant: HomeAssistant) -> None:
+    """Test assert_entity_state with lambda predicate for attribute values.
+
+    Demonstrates use-case 4: assert an attribute using a lambda function
+    instead of an exact value, enabling range or type checks.
+    """
+    # Use-case 4: use a lambda to assert the attribute value satisfies a condition
+    home_assistant.assert_entity_state(
+        "input_number.target_temperature",
+        expected_attributes={
+            "min": lambda v: float(v) >= 10,
+            "max": lambda v: float(v) <= 30,
+        },
+    )
