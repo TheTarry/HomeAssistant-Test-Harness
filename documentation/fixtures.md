@@ -40,7 +40,7 @@ home_assistant.assert_entity_state(entity_id: str, expected_state: str, timeout:
 home_assistant.remove_entity(entity_id: str) -> None
 home_assistant.given_an_entity(entity_id: str, state: str, attributes: dict = None) -> None
 home_assistant.clean_up_test_entities() -> None
-home_assistant.regenerate_access_token() -> None
+home_assistant.call_action(domain: str, action: str, data: dict = None) -> None
 ```
 
 ### home_assistant Usage
@@ -128,9 +128,28 @@ Removes all entities created via `given_an_entity()`. This method is called auto
 
 If cleanup fails for some entities, all tracked entities are still removed from tracking, and errors are reported collectively.
 
-#### `regenerate_access_token()`
+#### `call_action(domain, action, data=None)`
 
-Generates a new access token. Called automatically after time manipulation.
+Calls a Home Assistant action (service). This is the standard way to trigger entity behaviour in Home Assistant — for example turning a light on or off —
+and is preferred over `set_state()` for entities whose state is derived from other entities.
+
+- **domain**: The service domain (e.g., `"light"`, `"switch"`, `"input_boolean"`)
+- **action**: The action to call (e.g., `"turn_on"`, `"turn_off"`, `"toggle"`)
+- **data**: Optional dictionary of action data (e.g., `{"entity_id": "light.living_room"}`)
+
+> **Important:** For entities whose state is computed from another entity (e.g., a template `light` whose value is derived from an `input_boolean`), you must call
+> the appropriate action rather than using `set_state()`. Directly setting the state of the derived entity will have no effect because Home Assistant will
+> recompute it from the source entity. See [Writing Tests](usage.md#calling-actions) for more detail.
+
+**Example:**
+
+```python
+def test_turn_on_light_via_action(home_assistant):
+    # Turn on a light via action (preferred approach)
+    home_assistant.call_action("light", "turn_on", {"entity_id": "light.living_room"})
+
+    home_assistant.assert_entity_state("light.living_room", "on", timeout=5)
+```
 
 ## `app_daemon` (session scope)
 
