@@ -268,11 +268,11 @@ input_boolean:
   guest_mode:
     name: "Guest Mode"
     initial: false
-  # Backing state helpers for template entities below.
-  # Template entities whose value_template derives state from another entity require
-  # a separate helper to store and manage that state. The turn_on/turn_off actions
-  # on the template entity must update the helper so that the template reflects the
-  # change. Without a backing helper the turn_on/turn_off actions have no effect.
+  # Backing state helpers used by the template entities defined below.
+  # In this testing pattern, template entities that should have a controllable,
+  # persistent on/off state use a separate helper entity to store and manage that
+  # state. The turn_on/turn_off actions on the template entity update the helper so
+  # that the template reflects the change in tests.
   state_living_room_lamp:
     name: "[State] Living Room Lamp"
     initial: false
