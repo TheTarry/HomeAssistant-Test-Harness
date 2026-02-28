@@ -268,6 +268,17 @@ input_boolean:
   guest_mode:
     name: "Guest Mode"
     initial: false
+  # Backing state helpers used by the template entities defined below.
+  # In this testing pattern, template entities that should have a controllable,
+  # persistent on/off state use a separate helper entity to store and manage that
+  # state. The turn_on/turn_off actions on the template entity update the helper so
+  # that the template reflects the change in tests.
+  state_living_room_lamp:
+    name: "[State] Living Room Lamp"
+    initial: false
+  state_garage_door:
+    name: "[State] Garage Door"
+    initial: false
 
 input_number:
   temperature:
@@ -281,22 +292,30 @@ light:
     lights:
       living_room_lamp:
         friendly_name: "Living Room Lamp"
-        value_template: "{{ is_state('light.living_room_lamp', 'on') }}"
+        value_template: "{{ is_state('input_boolean.state_living_room_lamp', 'on') }}"
         turn_on:
-          - stop: "Turning on light"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.state_living_room_lamp
         turn_off:
-          - stop: "Turning off light"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.state_living_room_lamp
 
 switch:
   - platform: template
     switches:
       garage_door:
         friendly_name: "Garage Door"
-        value_template: "{{ is_state('switch.garage_door', 'on') }}"
+        value_template: "{{ is_state('input_boolean.state_garage_door', 'on') }}"
         turn_on:
-          - stop: "Switch turned on"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.state_garage_door
         turn_off:
-          - stop: "Switch turned off"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.state_garage_door
 ```
 
 Then reference the YAML file in your pytest configuration:
