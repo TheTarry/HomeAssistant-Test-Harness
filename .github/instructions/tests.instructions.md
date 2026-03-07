@@ -21,7 +21,7 @@ Entity states and the fake clock persist between tests.
 
 ```python
 # ✅ Automatic cleanup
-home_assistant.given_an_entity("sensor.test", "42", {"unit_of_measurement": "°C"})
+home_assistant.given_an_entity("sensor.test", "42", attributes={"unit_of_measurement": "°C"})
 
 # ✅ Controlling a derived entity
 home_assistant.call_action("light", "turn_on", {"entity_id": "light.living_room"})
