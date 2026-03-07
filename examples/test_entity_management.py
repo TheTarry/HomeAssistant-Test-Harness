@@ -120,26 +120,28 @@ def test_persistent_entities_available_with_expected_initial_state(home_assistan
     assert "Away" in house_mode["attributes"]["options"]
 
 
-def test_given_entity_has_labels_auto_rollback(home_assistant: HomeAssistant) -> None:
-    """Test that labels set via given_entity_has_labels() are automatically restored after the test.
+def test_label_based_automation(home_assistant: HomeAssistant) -> None:
+    """Test that a label-based automation turns on a light assigned the target label.
 
-    Uses a persistent entity (light.living_room_lamp) defined in persistent_entities.yaml.
-    The label is applied and verified here; after this test function completes the harness
-    automatically restores the entity's labels to their original values.
+    An automation in configuration.yaml fires when input_button.label_automation_trigger
+    is pressed and turns on all entities carrying the 'test_label_target' label.
+
+    This test assigns that label to light.living_room_lamp, presses the button,
+    and verifies the light turns on.  The label is automatically restored to its
+    original value (no labels) after the test function completes.
     """
-    home_assistant.given_entity_has_labels("light.living_room_lamp", ["test_label"])
+    # Assign the target label to the persistent light entity
+    home_assistant.given_entity_has_labels("light.living_room_lamp", ["test_label_target"])
 
-    # Labels are not part of the state response - just verify the call succeeds
-    # and the entity still reports its normal state
+    # Ensure the light starts off before triggering the automation
     home_assistant.assert_entity_state("light.living_room_lamp", "off")
 
+    # Press the button — triggers the automation that uses label-based targeting
+    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.label_automation_trigger"})
 
-def test_given_entity_has_labels_are_restored_after_previous_test(home_assistant: HomeAssistant) -> None:
-    """Test that labels applied in a previous test have been rolled back.
+    # The automation should turn on the light that carries the label
+    home_assistant.assert_entity_state("light.living_room_lamp", "on", timeout=10)
 
-    This test must run after test_given_entity_has_labels_auto_rollback to confirm
-    that the label 'test_label' is no longer present on light.living_room_lamp.
-    """
-    # Re-apply a different label to confirm we can still call given_entity_has_labels
-    home_assistant.given_entity_has_labels("light.living_room_lamp", ["another_label"])
-    home_assistant.assert_entity_state("light.living_room_lamp", "off")
+    # Restore light state for subsequent tests (persistent entity — not auto-cleaned up)
+    home_assistant.call_action("light", "turn_off", {"entity_id": "light.living_room_lamp"})
+    home_assistant.assert_entity_state("light.living_room_lamp", "off", timeout=5)

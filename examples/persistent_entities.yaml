@@ -63,6 +63,11 @@ counter:
     step: 1
     icon: mdi:bell
 
+input_button:
+  label_automation_trigger:
+    name: Label Automation Trigger
+    icon: mdi:label
+
 light:
   - platform: template
     lights:
