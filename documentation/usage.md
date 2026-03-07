@@ -314,10 +314,6 @@ template:
               entity_id: input_boolean.state_garage_door
 ```
 
-For template entities in `persistent_entities.yaml`, use modern `template:` syntax and include `unique_id`.
-This ensures entities are created in the Home Assistant entity registry, which is required for label-based
-features such as `home_assistant.given_entity_has_labels(...)`.
-
 Then reference the YAML file in your pytest configuration:
 
 ```toml
