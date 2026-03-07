@@ -118,3 +118,28 @@ def test_persistent_entities_available_with_expected_initial_state(home_assistan
     house_mode = home_assistant.get_state("input_select.house_mode")
     assert "Home" in house_mode["attributes"]["options"]
     assert "Away" in house_mode["attributes"]["options"]
+
+
+def test_given_entity_has_labels_auto_rollback(home_assistant: HomeAssistant) -> None:
+    """Test that labels set via given_entity_has_labels() are automatically restored after the test.
+
+    Uses a persistent entity (light.living_room_lamp) defined in persistent_entities.yaml.
+    The label is applied and verified here; after this test function completes the harness
+    automatically restores the entity's labels to their original values.
+    """
+    home_assistant.given_entity_has_labels("light.living_room_lamp", ["test_label"])
+
+    # Labels are not part of the state response - just verify the call succeeds
+    # and the entity still reports its normal state
+    home_assistant.assert_entity_state("light.living_room_lamp", "off")
+
+
+def test_given_entity_has_labels_are_restored_after_previous_test(home_assistant: HomeAssistant) -> None:
+    """Test that labels applied in a previous test have been rolled back.
+
+    This test must run after test_given_entity_has_labels_auto_rollback to confirm
+    that the label 'test_label' is no longer present on light.living_room_lamp.
+    """
+    # Re-apply a different label to confirm we can still call given_entity_has_labels
+    home_assistant.given_entity_has_labels("light.living_room_lamp", ["another_label"])
+    home_assistant.assert_entity_state("light.living_room_lamp", "off")

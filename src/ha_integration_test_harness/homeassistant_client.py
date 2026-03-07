@@ -1,10 +1,13 @@
 """Home Assistant API client."""
 
+import json
 import logging
 import time
 from typing import Any, Callable, Optional, Union, overload
+from urllib.parse import urlparse, urlunparse
 
 import requests
+import websocket
 
 from .exceptions import HomeAssistantClientError
 
@@ -28,6 +31,7 @@ class HomeAssistant:
         self._base_url = base_url
         self._access_token = access_token
         self._created_entities: set[str] = set()
+        self._entity_original_labels: dict[str, list[str]] = {}
 
     def set_state(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
         """Set the state and/or attributes of a Home Assistant entity.
@@ -248,6 +252,135 @@ class HomeAssistant:
         """
         self.set_state(entity_id, state, attributes)
         self._created_entities.add(entity_id)
+
+    def _ws_send_receive(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Authenticate over the WebSocket API and send a single command, returning the response.
+
+        Opens a new WebSocket connection for each call, performs the HA authentication
+        handshake, sends ``payload``, and returns the result message.
+
+        Args:
+            payload: The command payload to send. Must include an ``"id"`` field.
+
+        Returns:
+            The response message dict returned by Home Assistant.
+
+        Raises:
+            HomeAssistantClientError: If the connection, authentication, or command fails.
+        """
+        ws_parsed = urlparse(self._base_url)
+        ws_scheme = "wss" if ws_parsed.scheme == "https" else "ws"
+        ws_url = urlunparse(ws_parsed._replace(scheme=ws_scheme, path="/api/websocket"))
+        ws = websocket.WebSocket()
+        try:
+            ws.connect(ws_url, timeout=10)
+
+            # Receive auth_required
+            auth_required = json.loads(ws.recv())
+            if auth_required.get("type") != "auth_required":
+                raise HomeAssistantClientError(f"Unexpected WebSocket message during handshake: {auth_required}")
+
+            # Send auth
+            ws.send(json.dumps({"type": "auth", "access_token": self._access_token}))
+
+            # Receive auth_ok
+            auth_result = json.loads(ws.recv())
+            if auth_result.get("type") != "auth_ok":
+                raise HomeAssistantClientError(f"WebSocket authentication failed: {auth_result}")
+
+            # Send command and receive response
+            ws.send(json.dumps(payload))
+            response: dict[str, Any] = json.loads(ws.recv())
+            return response
+        except websocket.WebSocketException as e:
+            raise HomeAssistantClientError(f"WebSocket error communicating with Home Assistant at {ws_url}: {e}")
+        finally:
+            ws.close()
+
+    def _get_entity_labels(self, entity_id: str) -> list[str]:
+        """Fetch the current labels assigned to an entity via the entity registry.
+
+        Args:
+            entity_id: The entity ID to query (e.g., 'light.living_room').
+
+        Returns:
+            A list of label IDs currently assigned to the entity.
+
+        Raises:
+            HomeAssistantClientError: If the entity registry entry cannot be retrieved.
+        """
+        response = self._ws_send_receive({"id": 1, "type": "config/entity_registry/get", "entity_id": entity_id})
+        # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
+        if not response.get("success"):
+            raise HomeAssistantClientError(f"Failed to get entity registry entry for {entity_id}: {response}")
+        labels: list[str] = response.get("result", {}).get("labels", [])
+        return labels
+
+    def _set_entity_labels(self, entity_id: str, labels: list[str]) -> None:
+        """Overwrite the labels on an entity via the entity registry.
+
+        Args:
+            entity_id: The entity ID to update (e.g., 'light.living_room').
+            labels: The complete list of label IDs to assign to the entity.
+                Any pre-existing labels not in this list are removed.
+
+        Raises:
+            HomeAssistantClientError: If the entity registry update fails.
+        """
+        response = self._ws_send_receive({"id": 1, "type": "config/entity_registry/update", "entity_id": entity_id, "labels": labels})
+        # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
+        if not response.get("success"):
+            raise HomeAssistantClientError(f"Failed to update labels for {entity_id}: {response}")
+
+    def given_entity_has_labels(self, entity_id: str, labels: list[str]) -> None:
+        """Assign labels to an entity for testing purposes, with automatic rollback.
+
+        Saves the entity's current labels before modification so they can be restored
+        at the end of the test. If called multiple times for the same ``entity_id``,
+        only the labels captured on the first call are saved for restoration (preserving
+        the state before any test modification).
+
+        This method always **overwrites** any pre-existing labels on the entity with
+        the provided list.
+
+        Args:
+            entity_id: The entity ID to label (e.g., 'light.living_room').
+            labels: List of label IDs to assign to the entity. Overwrites any
+                pre-existing labels.
+
+        Raises:
+            HomeAssistantClientError: If the entity registry cannot be read or updated.
+        """
+        if entity_id not in self._entity_original_labels:
+            self._entity_original_labels[entity_id] = self._get_entity_labels(entity_id)
+        self._set_entity_labels(entity_id, labels)
+
+    def restore_entity_labels(self) -> None:
+        """Restore all entity labels modified by given_entity_has_labels() to their original values.
+
+        This method is called automatically after each test function completes.
+        It restores labels for all entities modified via given_entity_has_labels().
+        Successfully restored entities are cleared from tracking immediately, while
+        failed restorations remain tracked.
+
+        Raises:
+            HomeAssistantClientError: If any label restoration fails.
+        """
+        errors = []
+        successfully_restored = []
+
+        for entity_id, original_labels in list(self._entity_original_labels.items()):
+            try:
+                self._set_entity_labels(entity_id, original_labels)
+                successfully_restored.append(entity_id)
+            except HomeAssistantClientError as e:
+                errors.append(str(e))
+
+        for entity_id in successfully_restored:
+            del self._entity_original_labels[entity_id]
+
+        if errors:
+            raise HomeAssistantClientError(f"Failed to restore labels for {len(errors)} entities:\n" + "\n".join(errors))
 
     def clean_up_test_entities(self) -> None:
         """Remove all entities created via given_an_entity().

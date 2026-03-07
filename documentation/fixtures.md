@@ -39,7 +39,9 @@ home_assistant.get_state(entity_id: str) -> dict
 home_assistant.assert_entity_state(entity_id: str, expected_state: str | Callable[[str], bool] | None = None, expected_attributes: dict = None, timeout: int = 5) -> None
 home_assistant.remove_entity(entity_id: str) -> None
 home_assistant.given_an_entity(entity_id: str, state: str, attributes: dict = None) -> None
+home_assistant.given_entity_has_labels(entity_id: str, labels: list[str]) -> None
 home_assistant.clean_up_test_entities() -> None
+home_assistant.restore_entity_labels() -> None
 home_assistant.call_action(domain: str, action: str, data: dict = None) -> None
 ```
 
@@ -171,6 +173,40 @@ def test_automation(home_assistant):
 Removes all entities created via `given_an_entity()`. This method is called automatically by the test harness after each test function, so you typically don't need to call it manually.
 
 If cleanup fails for some entities, all tracked entities are still removed from tracking, and errors are reported collectively.
+
+#### `given_entity_has_labels(entity_id, labels)`
+
+Assigns labels to an entity via the Home Assistant entity registry, with **automatic rollback** at the end of the test function.
+The entity's original labels are captured before any changes are made, so they can be restored by the harness after the test.
+
+This method always **overwrites** any pre-existing labels on the entity with the provided list.
+It uses the Home Assistant [WebSocket API](https://developers.home-assistant.io/docs/api/websocket/) because label management is not available through the REST API.
+
+- **entity_id**: Entity ID of an entity in the HA entity registry (e.g., `"light.living_room"`)
+- **labels**: List of label IDs to assign to the entity. Replaces any existing labels.
+
+If called multiple times with the same `entity_id`, only the labels captured on the first call are saved for restoration
+(so the original pre-test labels are always what gets restored, regardless of how many times you update them during the test).
+
+**Example:**
+
+```python
+def test_label_based_automation(home_assistant):
+    # Assign a label — original labels are saved automatically
+    home_assistant.given_entity_has_labels("light.living_room", ["night_mode"])
+
+    # Verify state (label targeting is handled by HA automations)
+    home_assistant.assert_entity_state("light.living_room", "on", timeout=5)
+
+    # Labels are automatically restored to original values after this test
+```
+
+#### `restore_entity_labels()`
+
+Restores all entity labels modified by `given_entity_has_labels()` to the values they had before the test.
+This method is called automatically by the test harness after each test function, so you typically don't need to call it manually.
+
+If restoration fails for some entities, errors are reported collectively.
 
 #### `call_action(domain, action, data=None)`
 
