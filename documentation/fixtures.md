@@ -180,7 +180,8 @@ Assigns labels to an entity via the Home Assistant entity registry, with **autom
 The entity's original labels are captured before any changes are made, so they can be restored by the harness after the test.
 
 This method always **overwrites** any pre-existing labels on the entity with the provided list.
-It uses the Home Assistant [WebSocket API](https://developers.home-assistant.io/docs/api/websocket/) because label management is not available through the REST API.
+It reads current labels using the Home Assistant [REST API template endpoint](https://developers.home-assistant.io/docs/api/rest/#post-apitemplate)
+with `labels(...) | to_json`, then updates labels through the WebSocket entity-registry update command.
 
 - **entity_id**: Entity ID of an entity in the HA entity registry (e.g., `"light.living_room"`)
 - **labels**: List of label IDs to assign to the entity. Replaces any existing labels.

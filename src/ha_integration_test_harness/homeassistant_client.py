@@ -1,5 +1,6 @@
 """Home Assistant API client."""
 
+import ast
 import json
 import logging
 import time
@@ -297,8 +298,37 @@ class HomeAssistant:
         finally:
             ws.close()
 
+    def _extract_template_result(self, response: requests.Response) -> str:
+        """Extract rendered template text from a Home Assistant ``/api/template`` response.
+
+        Home Assistant may return template output either as plain text or as a JSON
+        object containing a ``result`` field, depending on version/configuration.
+
+        Args:
+            response: The HTTP response returned by ``POST /api/template``.
+
+        Returns:
+            The rendered template output as a string.
+
+        Raises:
+            HomeAssistantClientError: If the response body format is unsupported.
+        """
+        content_type = response.headers.get("Content-Type", "")
+        if "application/json" in content_type.lower():
+            data = response.json()
+            if isinstance(data, dict):
+                result = data.get("result")
+                if isinstance(result, str):
+                    return result
+            raise HomeAssistantClientError(f"Unexpected JSON response from /api/template: {data}")
+
+        return response.text
+
     def _get_entity_labels(self, entity_id: str) -> list[str]:
-        """Fetch the current labels assigned to an entity via the entity registry.
+        """Fetch the current labels assigned to an entity.
+
+        Uses ``POST /api/template`` with the Jinja ``labels()`` helper because
+        Home Assistant does not expose a WebSocket ``entity_registry/get`` command.
 
         Args:
             entity_id: The entity ID to query (e.g., 'light.living_room').
@@ -307,14 +337,30 @@ class HomeAssistant:
             A list of label IDs currently assigned to the entity.
 
         Raises:
-            HomeAssistantClientError: If the entity registry entry cannot be retrieved.
+            HomeAssistantClientError: If labels cannot be retrieved or parsed.
         """
-        response = self._ws_send_receive({"id": 1, "type": "config/entity_registry/get", "entity_id": entity_id})
-        # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
-        if not response.get("success"):
-            raise HomeAssistantClientError(f"Failed to get entity registry entry for {entity_id}: {response}")
-        labels: list[str] = response.get("result", {}).get("labels", [])
-        return labels
+        url = f"{self._base_url}/api/template"
+        try:
+            headers = {"Authorization": f"Bearer {self._access_token}"}
+            template = f"{{{{ labels({json.dumps(entity_id)}) | to_json }}}}"
+            response = requests.post(url, json={"template": template}, headers=headers)
+            response.raise_for_status()
+
+            rendered = self._extract_template_result(response).strip()
+            try:
+                labels_raw = json.loads(rendered)
+            except json.JSONDecodeError:
+                # Some HA versions/templates may render a Python-like list string.
+                labels_raw = ast.literal_eval(rendered)
+
+            if not isinstance(labels_raw, list) or not all(isinstance(label, str) for label in labels_raw):
+                raise HomeAssistantClientError(f"Template labels result for {entity_id} was not a list[str]: {labels_raw!r}")
+
+            return labels_raw
+        except requests.RequestException as e:
+            raise HomeAssistantClientError(f"Failed to get labels for entity {entity_id} from {url}: {e}")
+        except (json.JSONDecodeError, ValueError, SyntaxError) as e:
+            raise HomeAssistantClientError(f"Failed to parse labels template response for entity {entity_id} from {url}: {e}")
 
     def _set_entity_labels(self, entity_id: str, labels: list[str]) -> None:
         """Overwrite the labels on an entity via the entity registry.
