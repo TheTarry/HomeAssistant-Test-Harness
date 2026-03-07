@@ -192,5 +192,7 @@ def _cleanup_test_entities(request: pytest.FixtureRequest) -> Generator[None, No
     # Teardown: only clean up if the test used home_assistant fixture
     if "home_assistant" in request.fixturenames:
         home_assistant: HomeAssistant = request.getfixturevalue("home_assistant")
-        home_assistant.restore_entity_labels()
-        home_assistant.clean_up_test_entities()
+        try:
+            home_assistant.restore_entity_labels()
+        finally:
+            home_assistant.clean_up_test_entities()
