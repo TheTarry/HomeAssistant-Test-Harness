@@ -14,10 +14,8 @@ applyTo: "src/ha_integration_test_harness/**/*.py"
 
 ## Naming Conventions
 
-- **Functions/methods**: `snake_case`
-- **Classes**: `PascalCase`
-- **Constants**: `UPPER_SNAKE_CASE`
-- **Private methods/attributes**: leading underscore (e.g., `_apply_faketime`)
+Follow [PEP 8](https://peps.python.org/pep-0008/#naming-conventions) naming conventions.
+Private methods and attributes use a leading underscore (e.g., `_apply_faketime`).
 
 ## Error Handling
 
