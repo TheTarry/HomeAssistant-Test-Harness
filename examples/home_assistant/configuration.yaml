@@ -26,3 +26,16 @@ template:
       # Sensor to show current datetime for example test assertions
       - name: Current Datetime
         state: "{{ now().replace(microsecond=0).isoformat() }}"
+
+automation:
+  # Turns on all lights labelled 'test_label_target' when the label automation
+  # trigger button is pressed. Used by label-management example tests.
+  - id: example_label_based_turn_on
+    alias: "Example - Label Based Turn On"
+    trigger:
+      - platform: state
+        entity_id: input_button.label_automation_trigger
+    action:
+      - action: light.turn_on
+        target:
+          label_id: test_label_target

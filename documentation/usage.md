@@ -287,12 +287,11 @@ input_number:
     min: 10
     max: 30
 
-light:
-  - platform: template
-    lights:
-      living_room_lamp:
-        friendly_name: "Living Room Lamp"
-        value_template: "{{ is_state('input_boolean.state_living_room_lamp', 'on') }}"
+template:
+  - light:
+      - name: "Living Room Lamp"
+        unique_id: "living_room_lamp"
+        state: "{{ is_state('input_boolean.state_living_room_lamp', 'on') }}"
         turn_on:
           - action: input_boolean.turn_on
             target:
@@ -301,13 +300,10 @@ light:
           - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.state_living_room_lamp
-
-switch:
-  - platform: template
-    switches:
-      garage_door:
-        friendly_name: "Garage Door"
-        value_template: "{{ is_state('input_boolean.state_garage_door', 'on') }}"
+  - switch:
+      - name: "Garage Door"
+        unique_id: "garage_door"
+        state: "{{ is_state('input_boolean.state_garage_door', 'on') }}"
         turn_on:
           - action: input_boolean.turn_on
             target:
@@ -344,6 +340,10 @@ you specified in `ha_persistent_entities_path`. This is expected behavior - if y
 `configuration.yaml` while troubleshooting, you will see the generated name rather than your original filename.
 
 This keeps your existing configuration intact while loading persistent entities from a separate file.
+
+For template entities, prefer modern `template:` blocks with `unique_id` fields instead of legacy
+`platform: template` syntax, so Home Assistant registers the entities in the entity registry.
+This is required for label-based features such as `home_assistant.given_entity_has_labels(...)`.
 
 ### Startup Behavior
 

@@ -63,38 +63,39 @@ counter:
     step: 1
     icon: mdi:bell
 
-light:
-  - platform: template
-    lights:
-      living_room_lamp:
-        friendly_name: "Living Room Lamp"
-        value_template: "{{ is_state('input_boolean.state_living_room_lamp', 'on') }}"
-        turn_on:
-          - action: input_boolean.turn_on
-            target:
-              entity_id: input_boolean.state_living_room_lamp
-        turn_off:
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.state_living_room_lamp
-      study_light:
-        friendly_name: "Study Light"
-        value_template: "{{ is_state('input_boolean.state_study_light', 'on') }}"
-        turn_on:
-          - action: input_boolean.turn_on
-            target:
-              entity_id: input_boolean.state_study_light
-        turn_off:
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.state_study_light
+input_button:
+  label_automation_trigger:
+    name: Label Automation Trigger
+    icon: mdi:label
 
-switch:
-  - platform: template
-    switches:
-      garage_door:
-        friendly_name: "Garage Door"
-        value_template: "{{ is_state('input_boolean.state_garage_door', 'on') }}"
+template:
+  - light:
+      - name: "Living Room Lamp"
+        unique_id: "living_room_lamp"
+        state: "{{ is_state('input_boolean.state_living_room_lamp', 'on') }}"
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.state_living_room_lamp
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.state_living_room_lamp
+      - name: "Study Light"
+        unique_id: "study_light"
+        state: "{{ is_state('input_boolean.state_study_light', 'on') }}"
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.state_study_light
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.state_study_light
+  - switch:
+      - name: "Garage Door"
+        unique_id: "garage_door"
+        state: "{{ is_state('input_boolean.state_garage_door', 'on') }}"
         turn_on:
           - action: input_boolean.turn_on
             target:
