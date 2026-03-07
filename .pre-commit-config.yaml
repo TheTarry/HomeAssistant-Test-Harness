@@ -31,7 +31,7 @@ repos:
     rev: v0.15.0
     hooks:
       - id: markdownlint_docker
-        args: ['--style', '.markdownlint_style.rb']
+        args: ['--style', '.markdownlint_style.rb', '--ignore-front-matter']
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.37.1
     hooks:
