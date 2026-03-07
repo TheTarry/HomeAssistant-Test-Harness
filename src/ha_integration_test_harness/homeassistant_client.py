@@ -327,8 +327,8 @@ class HomeAssistant:
     def _get_entity_labels(self, entity_id: str) -> list[str]:
         """Fetch the current labels assigned to an entity.
 
-        Uses ``POST /api/template`` with the Jinja ``labels()`` helper because
-        Home Assistant does not expose a WebSocket ``entity_registry/get`` command.
+        Uses ``POST /api/template`` with the Jinja ``labels()`` helper to query
+        the labels associated with an entity via the templating API.
 
         Args:
             entity_id: The entity ID to query (e.g., 'light.living_room').
