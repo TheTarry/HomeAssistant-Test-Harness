@@ -333,9 +333,6 @@ the test harness copies your persistent entities file into a staged configuratio
 unique generated filename (e.g. `_harness_persistent_entities_<uuid>.yaml`), then patches
 `configuration.yaml` in that staged directory to reference the generated filename:
 
-For template entities, prefer modern `template:` blocks with `unique_id` fields instead of legacy
-`platform: template` syntax, so Home Assistant registers the entities in the entity registry.
-
 ```yaml
 homeassistant:
   packages:
@@ -347,6 +344,10 @@ you specified in `ha_persistent_entities_path`. This is expected behavior - if y
 `configuration.yaml` while troubleshooting, you will see the generated name rather than your original filename.
 
 This keeps your existing configuration intact while loading persistent entities from a separate file.
+
+For template entities, prefer modern `template:` blocks with `unique_id` fields instead of legacy
+`platform: template` syntax, so Home Assistant registers the entities in the entity registry.
+This is required for label-based features such as `home_assistant.given_entity_has_labels(...)`.
 
 ### Startup Behavior
 
