@@ -37,6 +37,8 @@ class HomeAssistant:
         self._access_token = access_token
         self._created_entities: set[str] = set()
         self._entity_original_config: dict[str, dict[str, Any]] = {}
+        self._known_area_ids: Optional[set[str]] = None
+        self._known_label_ids: Optional[set[str]] = None
 
     def set_state(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
         """Set the state and/or attributes of a Home Assistant entity.
@@ -361,9 +363,10 @@ class HomeAssistant:
     def _ensure_area_exists(self, area_id: str) -> None:
         """Ensure an area with the given ID exists in the area registry, creating it if necessary.
 
-        Lists the current area registry entries and, if no entry with ``area_id`` is found,
-        creates a new area using that value as the name (Home Assistant slugifies the name
-        to derive the area ID, so passing the area ID as the name is the expected convention).
+        The known area IDs are fetched from the registry on the first call and cached on the
+        instance for the lifetime of the session. Subsequent calls skip the list round-trip
+        entirely when the area is already known. New areas are added to the cache after
+        successful creation so that later calls for the same ID are also free of network overhead.
 
         Args:
             area_id: The area ID to check and, if absent, create (e.g., ``'living_room'``).
@@ -371,21 +374,26 @@ class HomeAssistant:
         Raises:
             HomeAssistantClientError: If listing or creating the area fails.
         """
-        list_response = self._ws_send_receive({"id": 1, "type": "config/area_registry/list"})
-        # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
-        if not list_response.get("success"):
-            raise HomeAssistantClientError(f"Failed to list area registry: {list_response}")
-        existing_ids = {entry["area_id"] for entry in (list_response.get("result") or [])}
-        if area_id not in existing_ids:
+        if self._known_area_ids is None:
+            list_response = self._ws_send_receive({"id": 1, "type": "config/area_registry/list"})
+            # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
+            if not list_response.get("success"):
+                raise HomeAssistantClientError(f"Failed to list area registry: {list_response}")
+            self._known_area_ids = {entry["area_id"] for entry in (list_response.get("result") or [])}
+        if area_id not in self._known_area_ids:
             create_response = self._ws_send_receive({"id": 1, "type": "config/area_registry/create", "name": area_id})
             if not create_response.get("success"):
                 raise HomeAssistantClientError(f"Failed to create area '{area_id}': {create_response}")
+            self._known_area_ids.add(area_id)
 
     def _ensure_labels_exist(self, label_ids: list[str]) -> None:
         """Ensure all given label IDs exist in the label registry, creating any that are missing.
 
-        Lists the current label registry entries and creates a new label for each ID that is
-        not already present (using the label ID as the name).
+        The known label IDs are fetched from the registry on the first call and cached on the
+        instance for the lifetime of the session. Subsequent calls skip the list round-trip
+        entirely when all requested labels are already known. New labels are added to the cache
+        after successful creation so that later calls for the same IDs are also free of network
+        overhead. Duplicate IDs within ``label_ids`` are silently de-duplicated.
 
         Args:
             label_ids: The label IDs to check and, if absent, create (e.g., ``['morning', 'night_mode']``).
@@ -395,17 +403,18 @@ class HomeAssistant:
         """
         if not label_ids:
             return
-        list_response = self._ws_send_receive({"id": 1, "type": "config/label_registry/list"})
-        # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
-        if not list_response.get("success"):
-            raise HomeAssistantClientError(f"Failed to list label registry: {list_response}")
-        existing_ids = {entry["label_id"] for entry in (list_response.get("result") or [])}
+        if self._known_label_ids is None:
+            list_response = self._ws_send_receive({"id": 1, "type": "config/label_registry/list"})
+            # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
+            if not list_response.get("success"):
+                raise HomeAssistantClientError(f"Failed to list label registry: {list_response}")
+            self._known_label_ids = {entry["label_id"] for entry in (list_response.get("result") or [])}
         for label_id in dict.fromkeys(label_ids):
-            if label_id not in existing_ids:
+            if label_id not in self._known_label_ids:
                 create_response = self._ws_send_receive({"id": 1, "type": "config/label_registry/create", "name": label_id})
                 if not create_response.get("success"):
                     raise HomeAssistantClientError(f"Failed to create label '{label_id}': {create_response}")
-                existing_ids.add(label_id)
+                self._known_label_ids.add(label_id)
 
     def given_entity_has(
         self,
