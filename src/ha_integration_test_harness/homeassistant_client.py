@@ -405,6 +405,7 @@ class HomeAssistant:
                 create_response = self._ws_send_receive({"id": 1, "type": "config/label_registry/create", "name": label_id})
                 if not create_response.get("success"):
                     raise HomeAssistantClientError(f"Failed to create label '{label_id}': {create_response}")
+                existing_ids.add(label_id)
 
     def given_entity_has(
         self,
