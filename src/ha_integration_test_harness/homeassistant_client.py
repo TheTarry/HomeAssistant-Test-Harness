@@ -1,6 +1,5 @@
 """Home Assistant API client."""
 
-import ast
 import json
 import logging
 import time
@@ -303,70 +302,6 @@ class HomeAssistant:
         finally:
             ws.close()
 
-    def _extract_template_result(self, response: requests.Response) -> str:
-        """Extract rendered template text from a Home Assistant ``/api/template`` response.
-
-        Home Assistant may return template output either as plain text or as a JSON
-        object containing a ``result`` field, depending on version/configuration.
-
-        Args:
-            response: The HTTP response returned by ``POST /api/template``.
-
-        Returns:
-            The rendered template output as a string.
-
-        Raises:
-            HomeAssistantClientError: If the response body format is unsupported.
-        """
-        content_type = response.headers.get("Content-Type", "")
-        if "application/json" in content_type.lower():
-            data = response.json()
-            if isinstance(data, dict):
-                result = data.get("result")
-                if isinstance(result, str):
-                    return result
-            raise HomeAssistantClientError(f"Unexpected JSON response from /api/template: {data}")
-
-        return response.text
-
-    def _get_entity_labels(self, entity_id: str) -> list[str]:
-        """Fetch the current labels assigned to an entity.
-
-        Uses ``POST /api/template`` with the Jinja ``labels()`` helper to query
-        the labels associated with an entity via the templating API.
-
-        Args:
-            entity_id: The entity ID to query (e.g., 'light.living_room').
-
-        Returns:
-            A list of label IDs currently assigned to the entity.
-
-        Raises:
-            HomeAssistantClientError: If labels cannot be retrieved or parsed.
-        """
-        url = f"{self._base_url}/api/template"
-        try:
-            headers = {"Authorization": f"Bearer {self._access_token}"}
-            template = f"{{{{ labels({json.dumps(entity_id)}) | to_json }}}}"
-            response = requests.post(url, json={"template": template}, headers=headers)
-            response.raise_for_status()
-
-            rendered = self._extract_template_result(response).strip()
-            try:
-                labels_raw = json.loads(rendered)
-            except json.JSONDecodeError:
-                # Some HA versions/templates may render a Python-like list string.
-                labels_raw = ast.literal_eval(rendered)
-
-            if not isinstance(labels_raw, list) or not all(isinstance(label, str) for label in labels_raw):
-                raise HomeAssistantClientError(f"Template labels result for {entity_id} was not a list[str]: {labels_raw!r}")
-
-            return labels_raw
-        except requests.RequestException as e:
-            raise HomeAssistantClientError(f"Failed to get labels for entity {entity_id} from {url}: {e}")
-        except (json.JSONDecodeError, ValueError, SyntaxError) as e:
-            raise HomeAssistantClientError(f"Failed to parse labels template response for entity {entity_id} from {url}: {e}")
-
     def _get_entity_config(self, entity_id: str) -> dict[str, Any]:
         """Fetch the current entity registry config (labels and area_id) for an entity.
 
@@ -504,38 +439,11 @@ class HomeAssistant:
         if labels is not _UNSET:
             self._set_entity_labels(entity_id, labels if labels is not None else [])
 
-    def given_entity_has_labels(self, entity_id: str, labels: list[str]) -> None:
-        """Assign labels to an entity for testing purposes, with automatic rollback.
-
-        .. deprecated::
-            Use :meth:`given_entity_has` instead, which also supports area assignment::
-
-                home_assistant.given_entity_has(entity_id, labels=labels)
-
-        Saves the entity's current labels and area before modification so they can be
-        restored at the end of the test. If called multiple times for the same
-        ``entity_id``, only the config captured on the first call is saved for
-        restoration (preserving the state before any test modification).
-
-        This method always **overwrites** any pre-existing labels on the entity with
-        the provided list.
-
-        Args:
-            entity_id: The entity ID to label (e.g., 'light.living_room').
-            labels: List of label IDs to assign to the entity. Overwrites any
-                pre-existing labels.
-
-        Raises:
-            HomeAssistantClientError: If the entity registry cannot be read or updated.
-        """
-        self.given_entity_has(entity_id, labels=labels)
-
     def restore_entity_config(self) -> None:
         """Restore all entity labels and areas modified by given_entity_has() to their original values.
 
         This method is called automatically after each test function completes.
-        It restores both labels and area for all entities modified via
-        ``given_entity_has()`` (or the deprecated ``given_entity_has_labels()``).
+        It restores both labels and area for all entities modified via ``given_entity_has()``.
         Successfully restored entities are cleared from tracking immediately, while
         failed restorations remain tracked.
 
@@ -557,21 +465,6 @@ class HomeAssistant:
 
         if errors:
             raise HomeAssistantClientError(f"Failed to restore config for {len(errors)} entities:\n" + "\n".join(errors))
-
-    def restore_entity_labels(self) -> None:
-        """Restore all entity labels modified by given_entity_has_labels() to their original values.
-
-        .. deprecated::
-            Use :meth:`restore_entity_config` instead, which also restores area assignments.
-
-        This method is called automatically after each test function completes.
-        It restores both labels and area for all entities modified via
-        ``given_entity_has()`` or ``given_entity_has_labels()``.
-
-        Raises:
-            HomeAssistantClientError: If any restoration fails.
-        """
-        self.restore_entity_config()
 
     def clean_up_test_entities(self) -> None:
         """Remove all entities created via given_an_entity().

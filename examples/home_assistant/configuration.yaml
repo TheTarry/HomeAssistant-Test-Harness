@@ -39,3 +39,15 @@ automation:
       - action: light.turn_on
         target:
           label_id: test_label_target
+
+  # Turns on all lights in the 'living_room' area when the area automation
+  # trigger button is pressed. Used by area-management example tests.
+  - id: example_area_based_turn_on
+    alias: "Example - Area Based Turn On"
+    trigger:
+      - platform: state
+        entity_id: input_button.area_automation_trigger
+    action:
+      - action: light.turn_on
+        target:
+          area_id: living_room

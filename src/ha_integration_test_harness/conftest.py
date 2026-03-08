@@ -176,7 +176,7 @@ def _cleanup_test_entities(request: pytest.FixtureRequest) -> Generator[None, No
     This fixture automatically runs after every test function (autouse=True) and:
 
     - Calls ``restore_entity_config()`` to undo any label or area changes made via
-      ``given_entity_has()`` (or the deprecated ``given_entity_has_labels()``) during the test.
+      ``given_entity_has()`` during the test.
     - Calls ``clean_up_test_entities()`` to remove any entities created via
       ``given_an_entity()``.
 
