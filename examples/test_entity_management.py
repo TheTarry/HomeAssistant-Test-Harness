@@ -120,6 +120,33 @@ def test_persistent_entities_available_with_expected_initial_state(home_assistan
     assert "Away" in house_mode["attributes"]["options"]
 
 
+def test_label_based_automation(home_assistant: HomeAssistant) -> None:
+    """Test that a label-based automation turns on a light assigned the target label.
+
+    An automation in configuration.yaml fires when input_button.label_automation_trigger
+    is pressed and turns on all entities carrying the 'test_label_target' label.
+
+    This test assigns that label to light.living_room_lamp, presses the button,
+    and verifies the light turns on.  The label is automatically restored to its
+    original value (no labels) after the test function completes.
+    """
+    # Assign the target label to the persistent light entity
+    home_assistant.given_entity_has("light.living_room_lamp", labels=["test_label_target"])
+
+    # Ensure the light starts off before triggering the automation
+    home_assistant.assert_entity_state("light.living_room_lamp", "off")
+
+    # Press the button — triggers the automation that uses label-based targeting
+    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.label_automation_trigger"})
+
+    # The automation should turn on the light that carries the label
+    home_assistant.assert_entity_state("light.living_room_lamp", "on", timeout=10)
+
+    # Restore light state for subsequent tests (persistent entity — not auto-cleaned up)
+    home_assistant.call_action("light", "turn_off", {"entity_id": "light.living_room_lamp"})
+    home_assistant.assert_entity_state("light.living_room_lamp", "off", timeout=5)
+
+
 def test_area_based_automation(home_assistant: HomeAssistant) -> None:
     """Test that an area-based automation turns on a light assigned to the target area.
 
@@ -140,30 +167,6 @@ def test_area_based_automation(home_assistant: HomeAssistant) -> None:
     home_assistant.call_action("input_button", "press", {"entity_id": "input_button.area_automation_trigger"})
 
     # The automation should turn on the light that belongs to the area
-    home_assistant.assert_entity_state("light.living_room_lamp", "on", timeout=10)
-
-    # Restore light state for subsequent tests (persistent entity — not auto-cleaned up)
-    home_assistant.call_action("light", "turn_off", {"entity_id": "light.living_room_lamp"})
-    home_assistant.assert_entity_state("light.living_room_lamp", "off", timeout=5)
-    """Test that a label-based automation turns on a light assigned the target label.
-
-    An automation in configuration.yaml fires when input_button.label_automation_trigger
-    is pressed and turns on all entities carrying the 'test_label_target' label.
-
-    This test assigns that label to light.living_room_lamp, presses the button,
-    and verifies the light turns on.  The label is automatically restored to its
-    original value (no labels) after the test function completes.
-    """
-    # Assign the target label to the persistent light entity
-    home_assistant.given_entity_has("light.living_room_lamp", labels=["test_label_target"])
-
-    # Ensure the light starts off before triggering the automation
-    home_assistant.assert_entity_state("light.living_room_lamp", "off")
-
-    # Press the button — triggers the automation that uses label-based targeting
-    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.label_automation_trigger"})
-
-    # The automation should turn on the light that carries the label
     home_assistant.assert_entity_state("light.living_room_lamp", "on", timeout=10)
 
     # Restore light state for subsequent tests (persistent entity — not auto-cleaned up)
