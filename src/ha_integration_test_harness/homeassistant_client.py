@@ -1,6 +1,5 @@
 """Home Assistant API client."""
 
-import ast
 import json
 import logging
 import time
@@ -13,6 +12,11 @@ import websocket
 from .exceptions import HomeAssistantClientError
 
 logger = logging.getLogger(__name__)
+
+# Sentinel object used to distinguish "not provided" from ``None`` in optional parameters.
+# Typed as ``Any`` so mypy accepts it as a default for parameters typed ``Optional[str]``
+# or ``Optional[list[str]]`` without raising an incompatible-default-value error.
+_UNSET: Any = object()
 
 
 class HomeAssistant:
@@ -32,7 +36,7 @@ class HomeAssistant:
         self._base_url = base_url
         self._access_token = access_token
         self._created_entities: set[str] = set()
-        self._entity_original_labels: dict[str, list[str]] = {}
+        self._entity_original_config: dict[str, dict[str, Any]] = {}
 
     def set_state(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
         """Set the state and/or attributes of a Home Assistant entity.
@@ -298,135 +302,146 @@ class HomeAssistant:
         finally:
             ws.close()
 
-    def _extract_template_result(self, response: requests.Response) -> str:
-        """Extract rendered template text from a Home Assistant ``/api/template`` response.
+    def _get_entity_config(self, entity_id: str) -> dict[str, Any]:
+        """Fetch the current entity registry config (labels and area_id) for an entity.
 
-        Home Assistant may return template output either as plain text or as a JSON
-        object containing a ``result`` field, depending on version/configuration.
-
-        Args:
-            response: The HTTP response returned by ``POST /api/template``.
-
-        Returns:
-            The rendered template output as a string.
-
-        Raises:
-            HomeAssistantClientError: If the response body format is unsupported.
-        """
-        content_type = response.headers.get("Content-Type", "")
-        if "application/json" in content_type.lower():
-            data = response.json()
-            if isinstance(data, dict):
-                result = data.get("result")
-                if isinstance(result, str):
-                    return result
-            raise HomeAssistantClientError(f"Unexpected JSON response from /api/template: {data}")
-
-        return response.text
-
-    def _get_entity_labels(self, entity_id: str) -> list[str]:
-        """Fetch the current labels assigned to an entity.
-
-        Uses ``POST /api/template`` with the Jinja ``labels()`` helper to query
-        the labels associated with an entity via the templating API.
+        Uses the WebSocket ``config/entity_registry/get`` command to retrieve the
+        current labels and area assignment for an entity in a single round-trip.
 
         Args:
             entity_id: The entity ID to query (e.g., 'light.living_room').
 
         Returns:
-            A list of label IDs currently assigned to the entity.
+            A dict with keys ``"labels"`` (list[str]) and ``"area_id"`` (Optional[str]).
 
         Raises:
-            HomeAssistantClientError: If labels cannot be retrieved or parsed.
+            HomeAssistantClientError: If the entity registry cannot be read.
         """
-        url = f"{self._base_url}/api/template"
-        try:
-            headers = {"Authorization": f"Bearer {self._access_token}"}
-            template = f"{{{{ labels({json.dumps(entity_id)}) | to_json }}}}"
-            response = requests.post(url, json={"template": template}, headers=headers)
-            response.raise_for_status()
+        response = self._ws_send_receive({"id": 1, "type": "config/entity_registry/get", "entity_id": entity_id})
+        # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
+        if not response.get("success"):
+            raise HomeAssistantClientError(f"Failed to get entity registry config for {entity_id}: {response}")
+        result = response.get("result")
+        if not isinstance(result, dict):
+            raise HomeAssistantClientError(f"Failed to get entity registry config for {entity_id}: unexpected result payload: {response}")
+        raw_labels = result.get("labels", [])
+        labels = [] if raw_labels is None else raw_labels
+        return {
+            "labels": labels,
+            "area_id": result.get("area_id"),
+        }
 
-            rendered = self._extract_template_result(response).strip()
-            try:
-                labels_raw = json.loads(rendered)
-            except json.JSONDecodeError:
-                # Some HA versions/templates may render a Python-like list string.
-                labels_raw = ast.literal_eval(rendered)
+    def _update_entity_registry(self, entity_id: str, area: Optional[str] = _UNSET, labels: Optional[list[str]] = _UNSET) -> None:
+        """Send a single entity-registry update containing only the specified fields.
 
-            if not isinstance(labels_raw, list) or not all(isinstance(label, str) for label in labels_raw):
-                raise HomeAssistantClientError(f"Template labels result for {entity_id} was not a list[str]: {labels_raw!r}")
-
-            return labels_raw
-        except requests.RequestException as e:
-            raise HomeAssistantClientError(f"Failed to get labels for entity {entity_id} from {url}: {e}")
-        except (json.JSONDecodeError, ValueError, SyntaxError) as e:
-            raise HomeAssistantClientError(f"Failed to parse labels template response for entity {entity_id} from {url}: {e}")
-
-    def _set_entity_labels(self, entity_id: str, labels: list[str]) -> None:
-        """Overwrite the labels on an entity via the entity registry.
+        Builds a ``config/entity_registry/update`` payload from the supplied arguments,
+        including only the fields that were explicitly provided (i.e. not the sentinel).
+        Both fields may be supplied together, resulting in a single atomic round-trip.
 
         Args:
             entity_id: The entity ID to update (e.g., 'light.living_room').
-            labels: The complete list of label IDs to assign to the entity.
-                Any pre-existing labels not in this list are removed.
+            area: The area ID to assign, or ``None`` to remove the area assignment.
+                Omit to leave the area field out of the payload entirely.
+            labels: The complete list of label IDs to assign (``None`` is normalised to
+                ``[]``). Omit to leave the labels field out of the payload entirely.
 
         Raises:
             HomeAssistantClientError: If the entity registry update fails.
         """
-        response = self._ws_send_receive({"id": 1, "type": "config/entity_registry/update", "entity_id": entity_id, "labels": labels})
+        payload: dict[str, Any] = {"id": 1, "type": "config/entity_registry/update", "entity_id": entity_id}
         # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
+        if area is not _UNSET:
+            payload["area_id"] = area
+        if labels is not _UNSET:
+            payload["labels"] = labels if labels is not None else []
+        response = self._ws_send_receive(payload)
         if not response.get("success"):
-            raise HomeAssistantClientError(f"Failed to update labels for {entity_id}: {response}")
+            raise HomeAssistantClientError(f"Failed to update entity registry for {entity_id}: {response}")
 
-    def given_entity_has_labels(self, entity_id: str, labels: list[str]) -> None:
-        """Assign labels to an entity for testing purposes, with automatic rollback.
+    def given_entity_has(
+        self,
+        entity_id: str,
+        area: Optional[str] = _UNSET,
+        labels: Optional[list[str]] = _UNSET,
+    ) -> None:
+        """Assign an area and/or labels to an entity for testing purposes, with automatic rollback.
 
-        Saves the entity's current labels before modification so they can be restored
-        at the end of the test. If called multiple times for the same ``entity_id``,
-        only the labels captured on the first call are saved for restoration (preserving
-        the state before any test modification).
+        Saves the entity's current area and labels before any modification so they can be
+        restored at the end of the test by ``restore_entity_config()``. If called multiple
+        times for the same ``entity_id`` during a test, only the config captured on the
+        first call is saved (preserving the pre-test state regardless of subsequent updates).
 
-        This method always **overwrites** any pre-existing labels on the entity with
-        the provided list.
+        At least one of ``area`` or ``labels`` must be provided (i.e. not left as the
+        default sentinel). The update is sent as a single WebSocket call — only the fields
+        explicitly provided are included in the payload, leaving omitted fields unchanged.
 
         Args:
-            entity_id: The entity ID to label (e.g., 'light.living_room').
-            labels: List of label IDs to assign to the entity. Overwrites any
-                pre-existing labels.
+            entity_id: The entity ID to update (e.g., ``'light.living_room'``). Must be
+                an entity registered in the HA entity registry.
+            area: The area ID to assign (e.g., ``'living_room'``), ``None`` to remove the
+                entity from its current area, or omit entirely to leave the area unchanged.
+            labels: The complete list of label IDs to assign (e.g., ``['night_mode']``),
+                ``None`` to remove all labels, or omit entirely to leave labels unchanged.
 
         Raises:
+            ValueError: If neither ``area`` nor ``labels`` is provided.
             HomeAssistantClientError: If the entity registry cannot be read or updated.
-        """
-        if entity_id not in self._entity_original_labels:
-            self._entity_original_labels[entity_id] = self._get_entity_labels(entity_id)
-        self._set_entity_labels(entity_id, labels)
 
-    def restore_entity_labels(self) -> None:
-        """Restore all entity labels modified by given_entity_has_labels() to their original values.
+        Examples:
+            Set area only::
+
+                home_assistant.given_entity_has("light.living_room", area="living_room")
+
+            Set labels only::
+
+                home_assistant.given_entity_has("light.living_room", labels=["night_mode"])
+
+            Set both area and labels::
+
+                home_assistant.given_entity_has("light.living_room", area="living_room", labels=["night_mode"])
+
+            Remove area assignment::
+
+                home_assistant.given_entity_has("light.living_room", area=None)
+
+            Remove all labels::
+
+                home_assistant.given_entity_has("light.living_room", labels=None)
+        """
+        if area is _UNSET and labels is _UNSET:
+            raise ValueError("At least one of 'area' or 'labels' must be explicitly provided")
+
+        if entity_id not in self._entity_original_config:
+            self._entity_original_config[entity_id] = self._get_entity_config(entity_id)
+
+        self._update_entity_registry(entity_id, area=area, labels=labels)
+
+    def restore_entity_config(self) -> None:
+        """Restore all entity labels and areas modified by given_entity_has() to their original values.
 
         This method is called automatically after each test function completes.
-        It restores labels for all entities modified via given_entity_has_labels().
+        It restores both labels and area for all entities modified via ``given_entity_has()``.
         Successfully restored entities are cleared from tracking immediately, while
         failed restorations remain tracked.
 
         Raises:
-            HomeAssistantClientError: If any label restoration fails.
+            HomeAssistantClientError: If any config restoration fails.
         """
         errors = []
         successfully_restored = []
 
-        for entity_id, original_labels in list(self._entity_original_labels.items()):
+        for entity_id, original_config in list(self._entity_original_config.items()):
             try:
-                self._set_entity_labels(entity_id, original_labels)
+                self.given_entity_has(entity_id, area=original_config["area_id"], labels=original_config["labels"])
                 successfully_restored.append(entity_id)
             except HomeAssistantClientError as e:
                 errors.append(str(e))
 
         for entity_id in successfully_restored:
-            del self._entity_original_labels[entity_id]
+            del self._entity_original_config[entity_id]
 
         if errors:
-            raise HomeAssistantClientError(f"Failed to restore labels for {len(errors)} entities:\n" + "\n".join(errors))
+            raise HomeAssistantClientError(f"Failed to restore config for {len(errors)} entities:\n" + "\n".join(errors))
 
     def clean_up_test_entities(self) -> None:
         """Remove all entities created via given_an_entity().

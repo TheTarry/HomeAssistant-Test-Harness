@@ -343,7 +343,7 @@ This keeps your existing configuration intact while loading persistent entities 
 
 For template entities, prefer modern `template:` blocks with `unique_id` fields instead of legacy
 `platform: template` syntax, so Home Assistant registers the entities in the entity registry.
-This is required for label-based features such as `home_assistant.given_entity_has_labels(...)`.
+This is required for any test that uses `home_assistant.given_entity_has(...)`, which interacts with the entity registry.
 
 ### Startup Behavior
 

@@ -67,6 +67,9 @@ input_button:
   label_automation_trigger:
     name: Label Automation Trigger
     icon: mdi:label
+  area_automation_trigger:
+    name: Area Automation Trigger
+    icon: mdi:home-map-marker
 
 template:
   - light:
