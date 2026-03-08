@@ -400,7 +400,7 @@ class HomeAssistant:
         if not list_response.get("success"):
             raise HomeAssistantClientError(f"Failed to list label registry: {list_response}")
         existing_ids = {entry["label_id"] for entry in (list_response.get("result") or [])}
-        for label_id in label_ids:
+        for label_id in dict.fromkeys(label_ids):
             if label_id not in existing_ids:
                 create_response = self._ws_send_receive({"id": 1, "type": "config/label_registry/create", "name": label_id})
                 if not create_response.get("success"):

@@ -487,7 +487,7 @@ def test_label_based_automation(home_assistant):
     # Assign the label — created in the label registry if it doesn't exist
     home_assistant.given_entity_has("light.living_room", labels=["night_mode"])
 
-    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.trigger"})
+    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.label_automation_trigger"})
     home_assistant.assert_entity_state("light.living_room", "on", timeout=10)
     # Labels are automatically restored after this test
 
@@ -495,7 +495,7 @@ def test_area_based_automation(home_assistant):
     # Assign the area — created in the area registry if it doesn't exist
     home_assistant.given_entity_has("light.living_room", area="living_room")
 
-    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.trigger"})
+    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.area_automation_trigger"})
     home_assistant.assert_entity_state("light.living_room", "on", timeout=10)
     # Area assignment is automatically restored after this test
 ```

@@ -28,7 +28,7 @@ template:
         state: "{{ now().replace(microsecond=0).isoformat() }}"
 
 automation:
-  # Turns on all entities labelled 'test_label_target' when the label automation
+  # Turns on all lights labelled 'test_label_target' when the label automation
   # trigger button is pressed. Used by label-management example tests.
   # Uses label_entities() template function so that the label must exist in the
   # label registry — this is what given_entity_has() ensures before assigning labels.
@@ -42,7 +42,7 @@ automation:
         target:
           entity_id: "{{ label_entities('test_label_target') }}"
 
-  # Turns on all entities in the 'living_room' area when the area automation
+  # Turns on all lights in the 'living_room' area when the area automation
   # trigger button is pressed. Used by area-management example tests.
   # Uses area_entities() template function so that the area must exist in the
   # area registry — this is what given_entity_has() ensures before assigning an area.
