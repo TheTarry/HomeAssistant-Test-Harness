@@ -323,9 +323,7 @@ class HomeAssistant:
             raise HomeAssistantClientError(f"Failed to get entity registry config for {entity_id}: {response}")
         result = response.get("result")
         if not isinstance(result, dict):
-            raise HomeAssistantClientError(
-                f"Failed to get entity registry config for {entity_id}: unexpected result payload: {response}"
-            )
+            raise HomeAssistantClientError(f"Failed to get entity registry config for {entity_id}: unexpected result payload: {response}")
         raw_labels = result.get("labels", [])
         labels = [] if raw_labels is None else raw_labels
         return {
@@ -333,56 +331,32 @@ class HomeAssistant:
             "area_id": result.get("area_id"),
         }
 
-    def _set_entity_labels(self, entity_id: str, labels: list[str]) -> None:
-        """Overwrite the labels on an entity via the entity registry.
+    def _update_entity_registry(self, entity_id: str, area: Optional[str] = _UNSET, labels: Optional[list[str]] = _UNSET) -> None:
+        """Send a single entity-registry update containing only the specified fields.
+
+        Builds a ``config/entity_registry/update`` payload from the supplied arguments,
+        including only the fields that were explicitly provided (i.e. not the sentinel).
+        Both fields may be supplied together, resulting in a single atomic round-trip.
 
         Args:
             entity_id: The entity ID to update (e.g., 'light.living_room').
-            labels: The complete list of label IDs to assign to the entity.
-                Any pre-existing labels not in this list are removed.
+            area: The area ID to assign, or ``None`` to remove the area assignment.
+                Omit to leave the area field out of the payload entirely.
+            labels: The complete list of label IDs to assign (``None`` is normalised to
+                ``[]``). Omit to leave the labels field out of the payload entirely.
 
         Raises:
             HomeAssistantClientError: If the entity registry update fails.
         """
-        response = self._ws_send_receive({"id": 1, "type": "config/entity_registry/update", "entity_id": entity_id, "labels": labels})
+        payload: dict[str, Any] = {"id": 1, "type": "config/entity_registry/update", "entity_id": entity_id}
         # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
+        if area is not _UNSET:
+            payload["area_id"] = area
+        if labels is not _UNSET:
+            payload["labels"] = labels if labels is not None else []
+        response = self._ws_send_receive(payload)
         if not response.get("success"):
-            raise HomeAssistantClientError(f"Failed to update labels for {entity_id}: {response}")
-
-    def _set_entity_area(self, entity_id: str, area_id: Optional[str]) -> None:
-        """Assign or remove the area for an entity via the entity registry.
-
-        Args:
-            entity_id: The entity ID to update (e.g., 'light.living_room').
-            area_id: The area ID to assign to the entity, or ``None`` to remove
-                any existing area assignment.
-
-        Raises:
-            HomeAssistantClientError: If the entity registry update fails.
-        """
-        response = self._ws_send_receive({"id": 1, "type": "config/entity_registry/update", "entity_id": entity_id, "area_id": area_id})
-        # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
-        if not response.get("success"):
-            raise HomeAssistantClientError(f"Failed to update area for {entity_id}: {response}")
-
-    def _restore_entity_registry(self, entity_id: str, labels: list[str], area_id: Optional[str]) -> None:
-        """Atomically restore both labels and area_id for an entity via the entity registry.
-
-        Sends a single WebSocket command that restores both the label list and area
-        assignment in one round-trip, ensuring an atomic restore.
-
-        Args:
-            entity_id: The entity ID to restore (e.g., 'light.living_room').
-            labels: The label list to restore.
-            area_id: The area ID to restore, or ``None`` to clear the area assignment.
-
-        Raises:
-            HomeAssistantClientError: If the entity registry update fails.
-        """
-        response = self._ws_send_receive({"id": 1, "type": "config/entity_registry/update", "entity_id": entity_id, "labels": labels, "area_id": area_id})
-        # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
-        if not response.get("success"):
-            raise HomeAssistantClientError(f"Failed to restore entity registry config for {entity_id}: {response}")
+            raise HomeAssistantClientError(f"Failed to update entity registry for {entity_id}: {response}")
 
     def given_entity_has(
         self,
@@ -398,8 +372,8 @@ class HomeAssistant:
         first call is saved (preserving the pre-test state regardless of subsequent updates).
 
         At least one of ``area`` or ``labels`` must be provided (i.e. not left as the
-        default sentinel). Each parameter is applied independently — omitting one leaves
-        the corresponding field unchanged.
+        default sentinel). The update is sent as a single WebSocket call — only the fields
+        explicitly provided are included in the payload, leaving omitted fields unchanged.
 
         Args:
             entity_id: The entity ID to update (e.g., ``'light.living_room'``). Must be
@@ -440,10 +414,7 @@ class HomeAssistant:
         if entity_id not in self._entity_original_config:
             self._entity_original_config[entity_id] = self._get_entity_config(entity_id)
 
-        if area is not _UNSET:
-            self._set_entity_area(entity_id, area)
-        if labels is not _UNSET:
-            self._set_entity_labels(entity_id, labels if labels is not None else [])
+        self._update_entity_registry(entity_id, area=area, labels=labels)
 
     def restore_entity_config(self) -> None:
         """Restore all entity labels and areas modified by given_entity_has() to their original values.
@@ -461,7 +432,7 @@ class HomeAssistant:
 
         for entity_id, original_config in list(self._entity_original_config.items()):
             try:
-                self._restore_entity_registry(entity_id, original_config["labels"], original_config["area_id"])
+                self.given_entity_has(entity_id, area=original_config["area_id"], labels=original_config["labels"])
                 successfully_restored.append(entity_id)
             except HomeAssistantClientError as e:
                 errors.append(str(e))
