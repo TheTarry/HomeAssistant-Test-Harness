@@ -37,6 +37,8 @@ class HomeAssistant:
         self._access_token = access_token
         self._created_entities: set[str] = set()
         self._entity_original_config: dict[str, dict[str, Any]] = {}
+        self._known_area_ids: Optional[set[str]] = None
+        self._known_label_ids: Optional[set[str]] = None
 
     def set_state(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
         """Set the state and/or attributes of a Home Assistant entity.
@@ -358,6 +360,62 @@ class HomeAssistant:
         if not response.get("success"):
             raise HomeAssistantClientError(f"Failed to update entity registry for {entity_id}: {response}")
 
+    def _ensure_area_exists(self, area_id: str) -> None:
+        """Ensure an area with the given ID exists in the area registry, creating it if necessary.
+
+        The known area IDs are fetched from the registry on the first call and cached on the
+        instance for the lifetime of the session. Subsequent calls skip the list round-trip
+        entirely when the area is already known. New areas are added to the cache after
+        successful creation so that later calls for the same ID are also free of network overhead.
+
+        Args:
+            area_id: The area ID to check and, if absent, create (e.g., ``'living_room'``).
+
+        Raises:
+            HomeAssistantClientError: If listing or creating the area fails.
+        """
+        if self._known_area_ids is None:
+            list_response = self._ws_send_receive({"id": 1, "type": "config/area_registry/list"})
+            # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
+            if not list_response.get("success"):
+                raise HomeAssistantClientError(f"Failed to list area registry: {list_response}")
+            self._known_area_ids = {entry["area_id"] for entry in (list_response.get("result") or [])}
+        if area_id not in self._known_area_ids:
+            create_response = self._ws_send_receive({"id": 1, "type": "config/area_registry/create", "name": area_id})
+            if not create_response.get("success"):
+                raise HomeAssistantClientError(f"Failed to create area '{area_id}': {create_response}")
+            self._known_area_ids.add(area_id)
+
+    def _ensure_labels_exist(self, label_ids: list[str]) -> None:
+        """Ensure all given label IDs exist in the label registry, creating any that are missing.
+
+        The known label IDs are fetched from the registry on the first call and cached on the
+        instance for the lifetime of the session. Subsequent calls skip the list round-trip
+        entirely when all requested labels are already known. New labels are added to the cache
+        after successful creation so that later calls for the same IDs are also free of network
+        overhead. Duplicate IDs within ``label_ids`` are silently de-duplicated.
+
+        Args:
+            label_ids: The label IDs to check and, if absent, create (e.g., ``['morning', 'night_mode']``).
+
+        Raises:
+            HomeAssistantClientError: If listing or creating labels fails.
+        """
+        if not label_ids:
+            return
+        if self._known_label_ids is None:
+            list_response = self._ws_send_receive({"id": 1, "type": "config/label_registry/list"})
+            # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
+            if not list_response.get("success"):
+                raise HomeAssistantClientError(f"Failed to list label registry: {list_response}")
+            self._known_label_ids = {entry["label_id"] for entry in (list_response.get("result") or [])}
+        for label_id in dict.fromkeys(label_ids):
+            if label_id not in self._known_label_ids:
+                create_response = self._ws_send_receive({"id": 1, "type": "config/label_registry/create", "name": label_id})
+                if not create_response.get("success"):
+                    raise HomeAssistantClientError(f"Failed to create label '{label_id}': {create_response}")
+                self._known_label_ids.add(label_id)
+
     def given_entity_has(
         self,
         entity_id: str,
@@ -375,17 +433,25 @@ class HomeAssistant:
         default sentinel). The update is sent as a single WebSocket call — only the fields
         explicitly provided are included in the payload, leaving omitted fields unchanged.
 
+        If the specified area or any of the specified labels do not yet exist in the
+        Home Assistant registries, they are created automatically before the entity
+        registry update is applied. Areas and labels created this way are **not** removed
+        at the end of the test — they persist for the remainder of the test session.
+
         Args:
             entity_id: The entity ID to update (e.g., ``'light.living_room'``). Must be
                 an entity registered in the HA entity registry.
             area: The area ID to assign (e.g., ``'living_room'``), ``None`` to remove the
                 entity from its current area, or omit entirely to leave the area unchanged.
+                If the area does not exist in the area registry it is created automatically.
             labels: The complete list of label IDs to assign (e.g., ``['night_mode']``),
                 ``None`` to remove all labels, or omit entirely to leave labels unchanged.
+                Any label IDs that do not exist in the label registry are created automatically.
 
         Raises:
             ValueError: If neither ``area`` nor ``labels`` is provided.
-            HomeAssistantClientError: If the entity registry cannot be read or updated.
+            HomeAssistantClientError: If the entity registry cannot be read or updated, or
+                if creating a missing area or label fails.
 
         Examples:
             Set area only::
@@ -410,6 +476,11 @@ class HomeAssistant:
         """
         if area is _UNSET and labels is _UNSET:
             raise ValueError("At least one of 'area' or 'labels' must be explicitly provided")
+
+        if area is not _UNSET and area is not None:
+            self._ensure_area_exists(area)
+        if labels is not _UNSET and labels is not None:
+            self._ensure_labels_exist(labels)
 
         if entity_id not in self._entity_original_config:
             self._entity_original_config[entity_id] = self._get_entity_config(entity_id)

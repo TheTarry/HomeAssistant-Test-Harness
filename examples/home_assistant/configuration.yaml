@@ -30,6 +30,8 @@ template:
 automation:
   # Turns on all lights labelled 'test_label_target' when the label automation
   # trigger button is pressed. Used by label-management example tests.
+  # Uses label_entities() template function so that the label must exist in the
+  # label registry — this is what given_entity_has() ensures before assigning labels.
   - id: example_label_based_turn_on
     alias: "Example - Label Based Turn On"
     trigger:
@@ -38,10 +40,12 @@ automation:
     action:
       - action: light.turn_on
         target:
-          label_id: test_label_target
+          entity_id: "{{ label_entities('test_label_target') }}"
 
   # Turns on all lights in the 'living_room' area when the area automation
   # trigger button is pressed. Used by area-management example tests.
+  # Uses area_entities() template function so that the area must exist in the
+  # area registry — this is what given_entity_has() ensures before assigning an area.
   - id: example_area_based_turn_on
     alias: "Example - Area Based Turn On"
     trigger:
@@ -50,4 +54,4 @@ automation:
     action:
       - action: light.turn_on
         target:
-          area_id: living_room
+          entity_id: "{{ area_entities('living_room') }}"

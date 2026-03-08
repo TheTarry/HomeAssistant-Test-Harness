@@ -181,9 +181,22 @@ The entity's original area and labels are captured before any changes are made, 
 
 At least one of `area` or `labels` must be supplied. Each parameter is applied independently — omitting one leaves the corresponding field unchanged on the entity.
 
+If the specified area does not yet exist in the Home Assistant area registry, it is **created automatically** before assigning it to the entity.
+Likewise, any label IDs that do not yet exist in the label registry are **created automatically**.
+Areas and labels created this way are not removed after each test — they persist for the lifetime of the test session.
+
+> **When is registry creation required?**
+> Automations that target entities using Jinja template functions such as `area_entities()` or `label_entities()` query the area/label registries at
+> runtime, so the area or label must exist as a registry entry for these functions to return results.
+> By contrast, automations that reference an area or label directly in the action `target` (e.g. `target: { area_id: living_room }`) resolve the
+> assignment from the entity registry alone and do not require a matching area/label registry entry.
+> `given_entity_has()` creates registry entries regardless, ensuring both targeting styles work.
+
 - **entity_id**: Entity ID of an entity in the HA entity registry (e.g., `"light.living_room"`)
 - **area**: Area ID to assign to the entity (e.g., `"living_room"`), `None` to remove any existing area assignment, or omit to leave the area unchanged.
+  The area is created in the area registry if it does not already exist.
 - **labels**: List of label IDs to assign to the entity. Replaces any existing labels. Pass `None` to remove all labels, or omit to leave labels unchanged.
+  Any label IDs that do not already exist in the label registry are created automatically.
 
 If called multiple times with the same `entity_id`, only the config captured on the first call is saved for restoration
 (so the original pre-test area and labels are always what gets restored, regardless of how many times you update them during the test).
