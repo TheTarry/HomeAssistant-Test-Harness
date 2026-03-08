@@ -131,7 +131,7 @@ def test_label_based_automation(home_assistant: HomeAssistant) -> None:
     original value (no labels) after the test function completes.
     """
     # Assign the target label to the persistent light entity
-    home_assistant.given_entity_has_labels("light.living_room_lamp", ["test_label_target"])
+    home_assistant.given_entity_has("light.living_room_lamp", labels=["test_label_target"])
 
     # Ensure the light starts off before triggering the automation
     home_assistant.assert_entity_state("light.living_room_lamp", "off")

@@ -39,9 +39,9 @@ home_assistant.get_state(entity_id: str) -> dict
 home_assistant.assert_entity_state(entity_id: str, expected_state: str | Callable[[str], bool] | None = None, expected_attributes: dict = None, timeout: int = 5) -> None
 home_assistant.remove_entity(entity_id: str) -> None
 home_assistant.given_an_entity(entity_id: str, state: str, attributes: dict = None) -> None
-home_assistant.given_entity_has_labels(entity_id: str, labels: list[str]) -> None
+home_assistant.given_entity_has(entity_id: str, area: str | None = ..., labels: list[str] | None = ...) -> None
 home_assistant.clean_up_test_entities() -> None
-home_assistant.restore_entity_labels() -> None
+home_assistant.restore_entity_config() -> None
 home_assistant.call_action(domain: str, action: str, data: dict = None) -> None
 ```
 
@@ -174,37 +174,45 @@ Removes all entities created via `given_an_entity()`. This method is called auto
 
 If cleanup fails for some entities, all tracked entities are still removed from tracking, and errors are reported collectively.
 
-#### `given_entity_has_labels(entity_id, labels)`
+#### `given_entity_has(entity_id, area=..., labels=...)`
 
-Assigns labels to an entity via the Home Assistant entity registry, with **automatic rollback** at the end of the test function.
-The entity's original labels are captured before any changes are made, so they can be restored by the harness after the test.
+Assigns an area and/or labels to an entity via the Home Assistant entity registry, with **automatic rollback** at the end of the test function.
+The entity's original area and labels are captured before any changes are made, so they can be restored by the harness after the test.
 
-This method always **overwrites** any pre-existing labels on the entity with the provided list.
-It reads current labels using the Home Assistant [REST API template endpoint](https://developers.home-assistant.io/docs/api/rest/#post-apitemplate)
-with `labels(...) | to_json`, then updates labels through the WebSocket entity-registry update command.
+At least one of `area` or `labels` must be supplied. Each parameter is applied independently — omitting one leaves the corresponding field unchanged on the entity.
 
 - **entity_id**: Entity ID of an entity in the HA entity registry (e.g., `"light.living_room"`)
-- **labels**: List of label IDs to assign to the entity. Replaces any existing labels.
+- **area**: Area ID to assign to the entity (e.g., `"living_room"`), `None` to remove any existing area assignment, or omit to leave the area unchanged.
+- **labels**: List of label IDs to assign to the entity. Replaces any existing labels. Pass `None` to remove all labels, or omit to leave labels unchanged.
 
-If called multiple times with the same `entity_id`, only the labels captured on the first call are saved for restoration
-(so the original pre-test labels are always what gets restored, regardless of how many times you update them during the test).
+If called multiple times with the same `entity_id`, only the config captured on the first call is saved for restoration
+(so the original pre-test area and labels are always what gets restored, regardless of how many times you update them during the test).
 
-**Example:**
+**Examples:**
 
 ```python
+def test_area_based_automation(home_assistant):
+    # Assign an area — original area is saved automatically
+    home_assistant.given_entity_has("light.living_room", area="living_room")
+
+    # Area is automatically restored to its original value after this test
+
 def test_label_based_automation(home_assistant):
     # Assign a label — original labels are saved automatically
-    home_assistant.given_entity_has_labels("light.living_room", ["night_mode"])
-
-    # Verify state (label targeting is handled by HA automations)
-    home_assistant.assert_entity_state("light.living_room", "on", timeout=5)
+    home_assistant.given_entity_has("light.living_room", labels=["night_mode"])
 
     # Labels are automatically restored to original values after this test
+
+def test_area_and_labels(home_assistant):
+    # Assign both area and labels at once
+    home_assistant.given_entity_has("light.living_room", area="living_room", labels=["night_mode"])
+
+    # Both are automatically restored after this test
 ```
 
-#### `restore_entity_labels()`
+#### `restore_entity_config()`
 
-Restores all entity labels modified by `given_entity_has_labels()` to the values they had before the test.
+Restores all entity area assignments and labels modified by `given_entity_has()` to the values they had before the test.
 This method is called automatically by the test harness after each test function, so you typically don't need to call it manually.
 
 If restoration fails for some entities, errors are reported collectively.

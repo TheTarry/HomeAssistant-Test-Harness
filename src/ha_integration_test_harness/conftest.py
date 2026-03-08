@@ -171,12 +171,12 @@ def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) ->
 
 @pytest.fixture(autouse=True)  # type: ignore[untyped-decorator]
 def _cleanup_test_entities(request: pytest.FixtureRequest) -> Generator[None, None, None]:
-    """Auto-cleanup fixture that removes test entities and restores labels after each test.
+    """Auto-cleanup fixture that removes test entities and restores entity config after each test.
 
     This fixture automatically runs after every test function (autouse=True) and:
 
-    - Calls ``restore_entity_labels()`` to undo any label changes made via
-      ``given_entity_has_labels()`` during the test.
+    - Calls ``restore_entity_config()`` to undo any label or area changes made via
+      ``given_entity_has()`` (or the deprecated ``given_entity_has_labels()``) during the test.
     - Calls ``clean_up_test_entities()`` to remove any entities created via
       ``given_an_entity()``.
 
@@ -198,6 +198,6 @@ def _cleanup_test_entities(request: pytest.FixtureRequest) -> Generator[None, No
     if "home_assistant" in request.fixturenames:
         home_assistant: HomeAssistant = request.getfixturevalue("home_assistant")
         try:
-            home_assistant.restore_entity_labels()
+            home_assistant.restore_entity_config()
         finally:
             home_assistant.clean_up_test_entities()
