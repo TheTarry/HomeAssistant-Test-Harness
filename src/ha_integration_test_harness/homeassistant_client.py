@@ -321,9 +321,15 @@ class HomeAssistant:
         # id=1 is safe: _ws_send_receive opens a fresh connection per call, so there is no ID collision.
         if not response.get("success"):
             raise HomeAssistantClientError(f"Failed to get entity registry config for {entity_id}: {response}")
-        result = response.get("result", {})
+        result = response.get("result")
+        if not isinstance(result, dict):
+            raise HomeAssistantClientError(
+                f"Failed to get entity registry config for {entity_id}: unexpected result payload: {response}"
+            )
+        raw_labels = result.get("labels", [])
+        labels = [] if raw_labels is None else raw_labels
         return {
-            "labels": result.get("labels", []),
+            "labels": labels,
             "area_id": result.get("area_id"),
         }
 
