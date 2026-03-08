@@ -426,7 +426,7 @@ class HomeAssistant:
 
         If the specified area or any of the specified labels do not yet exist in the
         Home Assistant registries, they are created automatically before the entity
-        registry update is applied.  Areas and labels created this way are **not** removed
+        registry update is applied. Areas and labels created this way are **not** removed
         at the end of the test — they persist for the remainder of the test session.
 
         Args:
