@@ -18,8 +18,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: ⤵️ Check out repository from GitHub
-        uses: actions/checkout@v6.0.2
+      - name: ⤵️ Checkout repository
+        uses: actions/checkout@v6
       - name: 🐍 Set up Python
         uses: actions/setup-python@v6
         with:

@@ -29,12 +29,12 @@ jobs:
           app-id: ${{ vars.RELEASE_MANAGER_APP_ID }}
           private-key: ${{ secrets.RELEASE_MANAGER_PRIVATE_KEY }}
 
-      - name: ⤵️ Check out code
-        uses: actions/checkout@v6.0.2
+      - name: ⤵️ Checkout repository
+        uses: actions/checkout@v6
         with:
           token: ${{ steps.release-manager-token.outputs.token }}
 
-      - name: � Set up Python and uv
+      - name: 🐍 Set up Python and uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -74,7 +74,7 @@ jobs:
             git push
           fi
 
-      - name: 🚀 Create GitHub Release
+      - name: 📦 Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ steps.release-manager-token.outputs.token }}
         run: |-
