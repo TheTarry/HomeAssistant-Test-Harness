@@ -2,11 +2,11 @@
 repos:
   # Python
   - repo: https://github.com/psf/black
-    rev: 25.11.0
+    rev: 26.3.1
     hooks:
       - id: black
   - repo: https://github.com/PyCQA/isort
-    rev: 7.0.0
+    rev: 8.0.1
     hooks:
       - id: isort
   - repo: https://github.com/csachs/pyproject-flake8
@@ -29,10 +29,10 @@ repos:
       - id: markdownlint_docker
         args: ['--style', '.markdownlint_style.rb']
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.37.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
