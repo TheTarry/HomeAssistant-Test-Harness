@@ -59,11 +59,12 @@ ha_integration_test_harness = "ha_integration_test_harness.conftest"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Include all files in containers/ directory as package data
+# Include all files in containers/ and custom_components/ directories as package data
 [tool.setuptools.package-data]
 ha_integration_test_harness = [
     "containers/**/*",
     "containers/**/.*",
+    "custom_components/**/*",
 ]
 
 [tool.pytest.ini_options]

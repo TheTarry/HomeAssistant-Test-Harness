@@ -43,6 +43,14 @@ class HomeAssistant:
     def set_state(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
         """Set the state and/or attributes of a Home Assistant entity.
 
+        If the entity was created via ``given_an_entity()``, the update is routed through
+        the bundled ``ha_test_harness`` custom integration via WebSocket, which preserves
+        the entity's registration in the entity registry.
+
+        Otherwise, the state is injected directly via the REST API (``POST /api/states``).
+        REST-injected entities are written only to the HA state machine — they are **not**
+        registered in the entity registry and cannot be used with ``given_entity_has()``.
+
         Args:
             entity_id: The entity ID to set the state for (e.g., 'light.living_room').
             state: The state value to set for the entity.
@@ -51,14 +59,23 @@ class HomeAssistant:
         Raises:
             HomeAssistantClientError: If the request fails due to network issues or API errors.
         """
+        if entity_id in self._created_entities:
+            payload: dict[str, Any] = {"id": 1, "type": "ha_test_harness/entity/set_state", "entity_id": entity_id, "state": state}
+            if attributes is not None:
+                payload["attributes"] = attributes
+            response = self._ws_send_receive(payload)
+            if not response.get("success"):
+                raise HomeAssistantClientError(f"Failed to set state for entity {entity_id} via ha_test_harness: {response}")
+            return
+
         url = f"{self._base_url}/api/states/{entity_id}"
         try:
             headers = {"Authorization": f"Bearer {self._access_token}"}
             body: dict[str, Any] = {"state": state}
             if attributes is not None:
                 body["attributes"] = attributes
-            response = requests.post(url, json=body, headers=headers)
-            response.raise_for_status()
+            response_http = requests.post(url, json=body, headers=headers)
+            response_http.raise_for_status()
         except requests.RequestException as e:
             raise HomeAssistantClientError(f"Failed to set state for entity {entity_id} at {url}: {e}")
 
@@ -207,19 +224,34 @@ class HomeAssistant:
     def remove_entity(self, entity_id: str) -> None:
         """Remove an entity from Home Assistant.
 
+        If the entity was created via ``given_an_entity()``, it is removed via the
+        bundled ``ha_test_harness`` custom integration WebSocket command, which deletes
+        the entity from both the state machine and the entity registry. This operation
+        is idempotent — if the entity is not found the command still succeeds.
+
+        Otherwise, the entity is removed via the REST API (``DELETE /api/states``), which
+        removes it from the state machine only (no entity registry entry to clean up).
+
         Args:
             entity_id: The entity ID to remove (e.g., 'light.living_room').
 
         Raises:
             HomeAssistantClientError: If the request fails due to network issues or API errors.
         """
+        if entity_id in self._created_entities:
+            payload: dict[str, Any] = {"id": 1, "type": "ha_test_harness/entity/delete", "entity_id": entity_id}
+            response = self._ws_send_receive(payload)
+            if not response.get("success"):
+                raise HomeAssistantClientError(f"Failed to remove entity {entity_id} via ha_test_harness: {response}")
+            return
+
         url = f"{self._base_url}/api/states/{entity_id}"
         try:
             headers = {"Authorization": f"Bearer {self._access_token}"}
-            response = requests.delete(url, headers=headers)
+            response_http = requests.delete(url, headers=headers)
             # 404 is acceptable - entity doesn't exist, which is the desired outcome
-            if response.status_code != 404:
-                response.raise_for_status()
+            if response_http.status_code != 404:
+                response_http.raise_for_status()
         except requests.RequestException as e:
             raise HomeAssistantClientError(f"Failed to remove entity {entity_id} from {url}: {e}")
 
@@ -243,24 +275,45 @@ class HomeAssistant:
             raise HomeAssistantClientError(f"Failed to call action {domain}.{action} at {url}: {e}")
 
     def given_an_entity(self, entity_id: str, state: str, attributes: Optional[dict[str, Any]] = None) -> None:
-        """Create an entity for testing purposes with automatic cleanup.
+        """Create a fully-registered entity for testing purposes with automatic cleanup.
 
-        This method creates a test entity using set_state() and automatically tracks it
-        for cleanup at the end of the test function. If called multiple times with the
-        same entity_id, it is tracked only once.
+        Creates the entity via the bundled ``ha_test_harness`` custom integration using
+        a WebSocket command. The entity is registered in the HA entity registry (it has a
+        ``unique_id``), appears in the HA UI, and supports area/label assignment via
+        ``given_entity_has()``. Supported domains: ``sensor``, ``binary_sensor``,
+        ``switch``, ``light``.
+
+        If called a second time with the same ``entity_id``, the existing entity's state
+        is updated in place (equivalent to calling ``set_state()``). The entity is tracked
+        for automatic cleanup at the end of the test regardless.
 
         Args:
-            entity_id: The entity ID to create (e.g., 'light.living_room').
-            state: The state value to set for the entity.
+            entity_id: The entity ID to create (e.g., 'sensor.test_temp'). The domain prefix
+                must be one of the supported domains listed above.
+            state: The initial state value for the entity.
             attributes: Optional dictionary of attributes to set for the entity.
 
         Raises:
-            HomeAssistantClientError: If the request fails due to network issues or API errors.
+            HomeAssistantClientError: If the entity could not be created, or if the domain
+                is not supported by the ha_test_harness integration.
         """
-        self.set_state(entity_id, state, attributes)
+        if entity_id in self._created_entities:
+            # Entity already exists — update its state in place.
+            self.set_state(entity_id, state, attributes)
+            return
+
+        payload: dict[str, Any] = {"id": 1, "type": "ha_test_harness/entity/create", "entity_id": entity_id, "state": state}
+        if attributes is not None:
+            payload["attributes"] = attributes
+        # Use a generous timeout: the server-side handler waits up to 30s for the platform to be
+        # ready (e.g. on the very first entity creation after HA starts), so the socket timeout must
+        # exceed that to avoid a spurious WebSocket timeout error.
+        response = self._ws_send_receive(payload, timeout=60)
+        if not response.get("success"):
+            raise HomeAssistantClientError(f"Failed to create entity {entity_id} via ha_test_harness: {response}")
         self._created_entities.add(entity_id)
 
-    def _ws_send_receive(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _ws_send_receive(self, payload: dict[str, Any], timeout: int = 10) -> dict[str, Any]:
         """Authenticate over the WebSocket API and send a single command, returning the response.
 
         Opens a new WebSocket connection for each call, performs the HA authentication
@@ -268,6 +321,8 @@ class HomeAssistant:
 
         Args:
             payload: The command payload to send. Must include an ``"id"`` field.
+            timeout: Socket timeout in seconds (default 10). Pass a larger value for commands
+                that may block server-side (e.g. waiting for a platform to become ready).
 
         Returns:
             The response message dict returned by Home Assistant.
@@ -280,7 +335,7 @@ class HomeAssistant:
         ws_url = urlunparse(ws_parsed._replace(scheme=ws_scheme, path="/api/websocket"))
         ws = websocket.WebSocket()
         try:
-            ws.connect(ws_url, timeout=10)
+            ws.connect(ws_url, timeout=timeout)  # type: ignore[no-untyped-call]
 
             # Receive auth_required
             auth_required = json.loads(ws.recv())

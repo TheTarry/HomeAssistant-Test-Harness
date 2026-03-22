@@ -27,28 +27,23 @@ from ha_integration_test_harness import HomeAssistant
 
 def test_given_an_entity_with_auto_cleanup(home_assistant: HomeAssistant) -> None:
     """Test that entities created via given_an_entity() are automatically cleaned up."""
-    # Create a test entity using the new method
-    home_assistant.given_an_entity("input_boolean.test_auto_cleanup", "on", attributes={"friendly_name": "Test Auto Cleanup"})
+    home_assistant.given_an_entity("switch.test_auto_cleanup", "on")
 
-    # Verify the entity exists
-    state = home_assistant.get_state("input_boolean.test_auto_cleanup")
+    state = home_assistant.get_state("switch.test_auto_cleanup")
     assert state is not None
     assert state["state"] == "on"
-    assert state["attributes"]["friendly_name"] == "Test Auto Cleanup"
 
     # No manual cleanup needed - the fixture will handle it automatically!
 
 
 def test_multiple_entities_with_auto_cleanup(home_assistant: HomeAssistant) -> None:
     """Test that multiple entities are all cleaned up automatically."""
-    # Create multiple test entities
-    home_assistant.given_an_entity("input_boolean.test_1", "on")
-    home_assistant.given_an_entity("input_boolean.test_2", "off")
+    home_assistant.given_an_entity("switch.test_1", "on")
+    home_assistant.given_an_entity("switch.test_2", "off")
     home_assistant.given_an_entity("sensor.test_sensor", "42", attributes={"unit_of_measurement": "°C"})
 
-    # Verify all entities exist
-    assert home_assistant.get_state("input_boolean.test_1")["state"] == "on"
-    assert home_assistant.get_state("input_boolean.test_2")["state"] == "off"
+    assert home_assistant.get_state("switch.test_1")["state"] == "on"
+    assert home_assistant.get_state("switch.test_2")["state"] == "off"
     sensor_state = home_assistant.get_state("sensor.test_sensor")
     assert sensor_state["state"] == "42"
     assert sensor_state["attributes"]["unit_of_measurement"] == "°C"
@@ -58,14 +53,12 @@ def test_multiple_entities_with_auto_cleanup(home_assistant: HomeAssistant) -> N
 
 def test_entity_update_tracked_correctly(home_assistant: HomeAssistant) -> None:
     """Test that updating an entity via given_an_entity() doesn't create duplicates."""
-    # Create an entity
-    home_assistant.given_an_entity("input_boolean.test_update", "on")
+    home_assistant.given_an_entity("switch.test_update", "on")
 
-    # Update the same entity
-    home_assistant.given_an_entity("input_boolean.test_update", "off", attributes={"updated": "true"})
+    # Update the same entity — should update in place, not create a duplicate
+    home_assistant.given_an_entity("switch.test_update", "off", attributes={"updated": "true"})
 
-    # Verify the entity has the updated state
-    state = home_assistant.get_state("input_boolean.test_update")
+    state = home_assistant.get_state("switch.test_update")
     assert state["state"] == "off"
     assert state["attributes"]["updated"] == "true"
 
@@ -74,23 +67,21 @@ def test_entity_update_tracked_correctly(home_assistant: HomeAssistant) -> None:
 
 def test_mixing_given_an_entity_with_manual_cleanup(home_assistant: HomeAssistant) -> None:
     """Test that manual cleanup still works alongside auto-cleanup."""
-    # Create an entity with auto-cleanup
-    home_assistant.given_an_entity("input_boolean.auto_cleanup", "on")
+    # Create a registered entity via given_an_entity (auto-cleanup)
+    home_assistant.given_an_entity("switch.auto_cleanup", "on")
 
-    # Create an entity with manual cleanup
-    home_assistant.set_state("input_boolean.manual_cleanup", "on")
+    # Inject a raw state via REST (manual cleanup required, entity is NOT registry-registered)
+    home_assistant.set_state("sensor.manual_cleanup", "42")
 
-    # Verify both entities exist
-    assert home_assistant.get_state("input_boolean.auto_cleanup")["state"] == "on"
-    assert home_assistant.get_state("input_boolean.manual_cleanup")["state"] == "on"
+    assert home_assistant.get_state("switch.auto_cleanup")["state"] == "on"
+    assert home_assistant.get_state("sensor.manual_cleanup")["state"] == "42"
 
-    # Manually clean up the manual entity
-    home_assistant.remove_entity("input_boolean.manual_cleanup")
+    # Manually clean up the REST-injected entity
+    home_assistant.remove_entity("sensor.manual_cleanup")
 
-    # Verify manual entity is gone
-    assert home_assistant.get_state("input_boolean.manual_cleanup") is None
+    assert home_assistant.get_state("sensor.manual_cleanup") is None
 
-    # The auto_cleanup entity will be cleaned up automatically
+    # The switch entity will be cleaned up automatically
 
 
 def test_persistent_entities_available_with_expected_initial_state(home_assistant: HomeAssistant) -> None:
@@ -145,6 +136,40 @@ def test_label_based_automation(home_assistant: HomeAssistant) -> None:
     # Restore light state for subsequent tests (persistent entity — not auto-cleaned up)
     home_assistant.call_action("light", "turn_off", {"entity_id": "light.living_room_lamp"})
     home_assistant.assert_entity_state("light.living_room_lamp", "off", timeout=5)
+
+
+def test_given_an_entity_then_remove_entity(home_assistant: HomeAssistant) -> None:
+    """Test that an entity created via given_an_entity() can be explicitly removed.
+
+    Entities created via given_an_entity() are registered in the HA entity registry.
+    Calling remove_entity() removes them from both the state machine and the registry.
+    """
+    home_assistant.given_an_entity("sensor.test_removable", "42", attributes={"unit_of_measurement": "°C"})
+
+    # Confirm entity is visible
+    home_assistant.assert_entity_state("sensor.test_removable", "42")
+
+    # Explicitly remove the entity
+    home_assistant.remove_entity("sensor.test_removable")
+
+    # Entity should be gone from the state machine
+    assert home_assistant.get_state("sensor.test_removable") is None
+
+
+def test_given_an_entity_then_assign_area_and_label(home_assistant: HomeAssistant) -> None:
+    """Test that an entity created via given_an_entity() supports area and label assignment.
+
+    Because given_an_entity() registers entities in the HA entity registry (with a
+    unique_id), they can be targeted by given_entity_has() in the same test — a
+    combination that was not possible with the previous REST-based entity creation.
+    """
+    home_assistant.given_an_entity("light.test_area_label", "off")
+
+    # Assign an area and a label to the newly created entity
+    home_assistant.given_entity_has("light.test_area_label", area="test_room", labels=["test_light"])
+
+    # Entity state should still be readable after registry updates
+    home_assistant.assert_entity_state("light.test_area_label", "off")
 
 
 def test_area_based_automation(home_assistant: HomeAssistant) -> None:
