@@ -38,14 +38,21 @@ jobs:
 
             Run /code-review on this pull request.
 
-            When you have completed the review:
-            1. Use `mcp__github_inline_comment__create_inline_comment` to post
-                inline comments for any specific code-level issues.
-            2. Use `gh pr comment` to post a summary comment on the PR
-                with an overall assessment, key findings, and any recommended
-                actions for the author.
+            When you have completed the review, submit all findings as a single
+            pull request review using the GitHub API:
 
-            Only post GitHub comments — do not output review text as chat messages.
+            ```bash
+            gh api repos/{owner}/{repo}/pulls/{number}/reviews \
+              --method POST \
+              --field body="<overall summary>" \
+              --field event="COMMENT" \
+              --field "comments[][path]=<file>" \
+              --field "comments[][line]=<line>" \
+              --field "comments[][body]=<comment>"
+            ```
+
+            Include all inline comments in the single API call — do not post
+            them individually. Do not output review text as chat messages.
 
           claude_args: |
-            --allowedTools "Bash(gh:*),mcp__github_inline_comment__create_inline_comment"
+            --allowedTools "Bash(gh:*)"
