@@ -210,6 +210,8 @@ home_assistant.call_action("light", "turn_on", {"entity_id": "light.living_room_
 ```python
 def test_polling_with_assert(home_assistant):
     """Test automation that has a delay."""
+    # set_state() injects state via REST (unregistered entity — not in the entity registry).
+    # Use given_an_entity() instead if you also need area/label assignment.
     home_assistant.set_state("binary_sensor.motion", "on")
 
     # Poll until light turns on (or timeout after 30 seconds)
@@ -388,10 +390,10 @@ def test_sunset_automation(home_assistant, time_machine):
 | Creation | During test via Python | At container startup |
 | Scope | Single test function | Entire session |
 | Cleanup | Automatic after test | Never (session lifetime) |
-| Domain services | May not be available early* | Always available |
+| Entity registry | Yes — has `unique_id`, visible in UI | Yes |
+| Area / label assignment | Yes (`given_entity_has()`) | Yes (`given_entity_has()`) |
+| Domain service calls | Yes (`turn_on`, `turn_off`, etc.) | Yes |
 | Use case | Temporary test-specific data | Integration-created entities |
-
-*Per-test entities may miss early automations that run during HA startup.
 
 ## Best Practices
 
@@ -425,8 +427,13 @@ def test_with_manual_cleanup(home_assistant):
 
 **When to use each approach:**
 
-- **Use `given_an_entity()`** (automatic): For most test entities that should be cleaned up after the test
-- **Use `set_state()` + `remove_entity()`** (manual): When you need explicit control over cleanup timing or want to test entity removal behavior
+- **Use `given_an_entity()`**: For most test entities. Entities are registered in the entity registry
+  (have a `unique_id`), appear in the HA UI, respond to service calls (`turn_on`, `turn_off`), and can be
+  combined with `given_entity_has()` for area/label assignment.
+  Supported domains: `sensor`, `binary_sensor`, `switch`, `light`.
+- **Use `set_state()`**: For raw state injection where registry registration is not needed — e.g. providing
+  a synthetic sensor reading that an automation reads via a template. Entities created this way cannot be
+  used with `given_entity_has()`.
 
 ### Factory Fixtures
 
@@ -481,6 +488,23 @@ def test_multiple_entities(create_entity_manual):
 
 Use `given_entity_has()` to temporarily assign an area or labels to an entity for the duration of a test.
 The harness automatically creates any missing area or label registry entries and restores the entity's original configuration after the test.
+
+`given_entity_has()` works with both persistent entities and per-test entities created via `given_an_entity()`.
+This means you can create a test-specific entity and immediately assign it an area or label — all within a single test:
+
+```python
+def test_per_test_entity_with_area_and_label(home_assistant):
+    # Create a per-test light entity (registered in the entity registry)
+    home_assistant.given_an_entity("light.test_light", "off")
+
+    # Assign area and label — works because given_an_entity() registers the entity
+    home_assistant.given_entity_has("light.test_light", area="living_room", labels=["night_mode"])
+
+    # Trigger automation targeting by label or area
+    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.label_automation_trigger"})
+    home_assistant.assert_entity_state("light.test_light", "on", timeout=10)
+    # Entity and its config are both automatically cleaned up after the test
+```
 
 ```python
 def test_label_based_automation(home_assistant):
