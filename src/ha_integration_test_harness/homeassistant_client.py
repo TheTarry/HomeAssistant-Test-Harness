@@ -106,6 +106,27 @@ class HomeAssistant:
         except requests.RequestException as e:
             raise HomeAssistantClientError(f"Failed to get state for entity {entity_id} from {url}: {e}")
 
+    def get_config(self) -> dict[str, Any]:
+        """Fetch the Home Assistant configuration.
+
+        Returns:
+            The configuration dictionary from ``GET /api/config``.
+            Relevant keys include ``time_zone`` (IANA timezone name, e.g. ``"Europe/London"``),
+            ``latitude``, ``longitude``, and ``unit_system``.
+
+        Raises:
+            HomeAssistantClientError: If the request fails due to network issues or API errors.
+        """
+        url = f"{self._base_url}/api/config"
+        try:
+            headers = {"Authorization": f"Bearer {self._access_token}"}
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            result: dict[str, Any] = response.json()
+            return result
+        except requests.RequestException as e:
+            raise HomeAssistantClientError(f"Failed to fetch Home Assistant config from {url}: {e}")
+
     @overload
     def assert_entity_state(self, entity_id: str, expected_state: str, expected_attributes: Optional[dict[str, Any]] = None, timeout: int = 5) -> None: ...
 
