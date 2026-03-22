@@ -498,6 +498,12 @@ class DockerComposeManager:
         dst = staging_dir / "custom_components" / "ha_test_harness"
         try:
             dst.parent.mkdir(exist_ok=True)
+            if dst.exists():
+                logger.warning(
+                    f"Staged config already contains a 'custom_components/ha_test_harness' directory at {dst}. "
+                    "It will be overwritten by the bundled ha_test_harness integration. "
+                    "Rename or remove the existing directory if this is not intended."
+                )
             shutil.copytree(src, dst, dirs_exist_ok=True)
             logger.debug(f"Injected ha_test_harness custom integration into: {dst}")
         except (OSError, shutil.Error) as e:
@@ -515,7 +521,10 @@ class DockerComposeManager:
         config_file = staging_dir / "configuration.yaml"
         try:
             content = config_file.read_text()
-            if "ha_test_harness:" not in content:
+            # Use a line-anchored regex to avoid matching commented-out lines (e.g. "# ha_test_harness:").
+            if not re.search(r"^ha_test_harness:", content, re.MULTILINE):
+                # Direct write is acceptable here: this is a staging directory that nothing else is
+                # reading concurrently — the file is written once before containers start.
                 config_file.write_text(content.rstrip() + "\n\nha_test_harness:\n")
                 logger.debug("Appended ha_test_harness: to configuration.yaml")
         except OSError as e:

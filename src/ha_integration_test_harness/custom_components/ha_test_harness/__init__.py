@@ -5,7 +5,7 @@ entities during integration tests. Entities are fully registered in the HA Entit
 Registry (they have unique_ids), so they support area and label assignment via the
 standard entity registry API.
 
-Supported domains: sensor, binary_sensor, switch, light.
+Supported domains: sensor, binary_sensor, input_boolean, switch, light.
 
 WebSocket commands exposed:
   ha_test_harness/entity/create   - Create a new virtual entity.
@@ -29,7 +29,7 @@ from homeassistant.helpers.typing import ConfigType
 from .entity import VirtualBinarySensorEntity, VirtualLightEntity, VirtualSensorEntity, VirtualToggleEntity
 
 DOMAIN = "ha_test_harness"
-SUPPORTED_DOMAINS = ["sensor", "binary_sensor", "switch", "light"]
+SUPPORTED_DOMAINS = ["sensor", "binary_sensor", "input_boolean", "switch", "light"]
 _PLATFORM_READY_TIMEOUT = 30  # seconds to wait for a platform callback to be registered
 
 _LOGGER = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ def _create_virtual_entity(domain: str, unique_id: str, entity_id: str, state: s
         return VirtualSensorEntity(unique_id, entity_id, state, attributes)
     if domain == "binary_sensor":
         return VirtualBinarySensorEntity(unique_id, entity_id, state, attributes)
-    if domain == "switch":
+    if domain in ("switch", "input_boolean"):
         return VirtualToggleEntity(unique_id, entity_id, state, attributes)
     if domain == "light":
         return VirtualLightEntity(unique_id, entity_id, state, attributes)
@@ -183,6 +183,9 @@ async def ws_set_entity_state(hass: HomeAssistant, connection: websocket_api.Act
         return
 
     entity.set_virtual_state(state, attributes)
+    # Wait for all HA listeners (e.g. automations) to process the state change before responding,
+    # consistent with ws_create_entity which also awaits async_block_till_done().
+    await hass.async_block_till_done()
     connection.send_result(msg["id"], {"entity_id": entity_id, "state": state})
 
 

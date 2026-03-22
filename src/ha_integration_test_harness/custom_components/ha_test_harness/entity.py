@@ -105,7 +105,7 @@ class VirtualBinarySensorEntity(BinarySensorEntity):
 
 
 class VirtualToggleEntity(ToggleEntity):
-    """A virtual toggle entity used for input_boolean and switch domains."""
+    """A virtual toggle entity used for the switch and input_boolean domains."""
 
     _attr_should_poll = False
 

@@ -319,6 +319,11 @@ class HomeAssistant:
         Opens a new WebSocket connection for each call, performs the HA authentication
         handshake, sends ``payload``, and returns the result message.
 
+        Note: A new TCP connection and auth exchange is opened per call. Operations like
+        ``given_an_entity()`` followed by ``given_entity_has()`` in the same test will each
+        open their own connection. This is acceptable for a test harness, but if suite startup
+        latency becomes a concern, consider introducing a persistent/reusable connection.
+
         Args:
             payload: The command payload to send. Must include an ``"id"`` field.
             timeout: Socket timeout in seconds (default 10). Pass a larger value for commands
@@ -558,6 +563,11 @@ class HomeAssistant:
 
         for entity_id, original_config in list(self._entity_original_config.items()):
             try:
+                # Re-entering given_entity_has() here is safe: the snapshot guard
+                # ("if entity_id not in self._entity_original_config") is still False
+                # for each entity_id because we have not yet deleted entries from
+                # _entity_original_config (that happens in the loop below, only after
+                # success).  So the pre-test config is not overwritten by the restore call.
                 self.given_entity_has(entity_id, area=original_config["area_id"], labels=original_config["labels"])
                 successfully_restored.append(entity_id)
             except HomeAssistantClientError as e:
