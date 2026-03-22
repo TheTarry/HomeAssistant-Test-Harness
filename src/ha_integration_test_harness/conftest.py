@@ -164,13 +164,15 @@ def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) ->
     try:
         ha_config = home_assistant.get_config()
         timezone = ha_config.get("time_zone")
-        machine = TimeMachine(
+    except Exception as e:
+        raise RuntimeError(f"time_machine fixture: failed to fetch Home Assistant config at session startup — is Home Assistant healthy? Underlying error: {e}") from e
+    try:
+        return TimeMachine(
             apply_faketime=lambda content: docker.write_container_file("homeassistant", "/shared_data/.faketime", content),
             on_time_set=None,  # No token regeneration needed with long-lived token
             get_entity_state=lambda entity_id: home_assistant.get_state(entity_id),
             timezone=timezone,  # e.g. "Europe/London" — used by jump_to_next for local-time arithmetic
         )
-        return machine
     except ValueError as e:
         raise RuntimeError(
             f"time_machine fixture: Home Assistant returned an unrecognised timezone '{timezone}'. Check the 'time_zone' field in your HA configuration.yaml. Underlying error: {e}"
