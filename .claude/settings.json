@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pre-commit run:*)",
+      "Bash(uv run:*)",
+      "Bash(./run_checks.sh)",
+      "WebFetch(domain:developers.home-assistant.io)",
+      "WebFetch(domain:www.home-assistant.io)",
+      "WebFetch(domain:community.home-assistant.io)"
+    ]
+  }
+}
