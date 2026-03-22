@@ -81,7 +81,13 @@ def test_manual_cleanup(home_assistant):
 
 #### `set_state(entity_id, state, attributes=None)`
 
-Sets the state of an entity. Creates the entity if it doesn't exist.
+Sets the state of an entity.
+
+- If the entity was created in the current test via `given_an_entity()`, the update is routed through the
+  bundled `ha_test_harness` integration via WebSocket, which preserves its entity registry registration.
+- Otherwise, the state is injected directly via the REST API (`POST /api/states`). REST-injected entities
+  are written only to the HA state machine — they are **not** registered in the entity registry and cannot
+  be used with `given_entity_has()`.
 
 - **entity_id**: Entity ID (e.g., `"switch.test"`)
 - **state**: State value (e.g., `"on"`, `"off"`, `"20.5"`)
@@ -143,29 +149,49 @@ home_assistant.assert_entity_state(
 
 #### `remove_entity(entity_id)`
 
-Deletes an entity from Home Assistant. Use for manual test cleanup.
+Removes an entity from Home Assistant.
+
+- If the entity was created via `given_an_entity()`, it is removed via the `ha_test_harness` integration
+  WebSocket command, which deletes the entity from both the state machine and the entity registry.
+  This is idempotent — if the entity is not found the command still succeeds.
+- Otherwise, the entity is removed via the REST API, which removes it from the state machine only.
 
 #### `given_an_entity(entity_id, state, attributes=None)`
 
-Creates an entity for testing with **automatic cleanup**. The entity is tracked and automatically removed after the test function completes.
+Creates a fully-registered entity for testing with **automatic cleanup**.
 
-- **entity_id**: Entity ID (e.g., `"switch.test"`)
-- **state**: State value (e.g., `"on"`, `"off"`, `"20.5"`)
+Unlike `set_state()`, `given_an_entity()` creates the entity via the bundled `ha_test_harness` custom
+integration. The entity is registered in the HA entity registry (it has a `unique_id`), appears in the HA UI,
+and supports area/label assignment via `given_entity_has()`. The entity is tracked and automatically removed
+after the test function completes.
+
+Supported domains: `sensor`, `binary_sensor`, `switch`, `light`.
+
+- **entity_id**: Entity ID (e.g., `"sensor.test_temp"`). The domain prefix must be one of the supported domains listed above.
+- **state**: Initial state value (e.g., `"on"`, `"off"`, `"20.5"`)
 - **attributes**: Optional dictionary of entity attributes
 
-If called multiple times with the same `entity_id`, the entity is tracked only once (no duplicates).
+If called multiple times with the same `entity_id`, the entity's state is updated in place — it is tracked only once.
 
-**Example:**
+**Basic example:**
 
 ```python
 def test_automation(home_assistant):
-    # Create entity with automatic cleanup
     home_assistant.given_an_entity("sensor.test", "42", {"unit_of_measurement": "°C"})
-
-    # Test logic here
     assert home_assistant.get_state("sensor.test")["state"] == "42"
-
     # No cleanup needed - handled automatically!
+```
+
+**Combined with `given_entity_has()` (registry-only, not possible with `set_state()`):**
+
+```python
+def test_area_label_on_per_test_entity(home_assistant):
+    home_assistant.given_an_entity("light.test_light", "off")
+    home_assistant.given_entity_has("light.test_light", area="living_room", labels=["night_mode"])
+
+    # Entity exists, is registered, and has area/label assigned
+    assert home_assistant.get_state("light.test_light") is not None
+    # Both entity and entity config are automatically cleaned up after the test
 ```
 
 #### `clean_up_test_entities()`
@@ -192,7 +218,9 @@ Areas and labels created this way are not removed after each test — they persi
 > assignment from the entity registry alone and do not require a matching area/label registry entry.
 > `given_entity_has()` creates registry entries regardless, ensuring both targeting styles work.
 
-- **entity_id**: Entity ID of an entity in the HA entity registry (e.g., `"light.living_room"`)
+- **entity_id**: Entity ID of an entity in the HA entity registry. This includes both persistent entities
+  (defined in `ha_persistent_entities_path`) and per-test entities created via `given_an_entity()`.
+  Entities created via `set_state()` are **not** registered and cannot be used here.
 - **area**: Area ID to assign to the entity (e.g., `"living_room"`), `None` to remove any existing area assignment, or omit to leave the area unchanged.
   The area is created in the area registry if it does not already exist.
 - **labels**: List of label IDs to assign to the entity. Replaces any existing labels. Pass `None` to remove all labels, or omit to leave labels unchanged.

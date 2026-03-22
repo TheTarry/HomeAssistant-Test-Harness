@@ -47,14 +47,24 @@ Tests (examples/) → Pytest plugin (conftest.py) → Client libraries → Docke
 
 - **[docker_manager.py](src/ha_integration_test_harness/docker_manager.py)** — Orchestrates Docker
   Compose. Auto-discovers HA config from `HOME_ASSISTANT_CONFIG_ROOT` env var or `home_assistant/`
-  subdirectory. Validates `configuration.yaml` exists. Stages config, manages persistent entities
-  via YAML overlay + `configuration.yaml` patching, handles ephemeral ports for parallel test
-  support.
+  subdirectory. Validates `configuration.yaml` exists. **Always** stages config: injects the bundled
+  `ha_test_harness` custom integration into `custom_components/`, appends `ha_test_harness:` to
+  `configuration.yaml`, and optionally applies the persistent entities YAML overlay. Handles ephemeral
+  ports for parallel test support.
+
+- **[custom_components/ha_test_harness/](src/ha_integration_test_harness/custom_components/ha_test_harness/)** —
+  Bundled HA custom integration. Injected into every staged config at container startup. Exposes
+  three WebSocket commands: `ha_test_harness/entity/create`, `ha_test_harness/entity/set_state`,
+  `ha_test_harness/entity/delete`. Entities created via this integration are fully registered in the
+  HA entity registry (have a `unique_id`, appear in the UI). Supported domains: `sensor`,
+  `binary_sensor`, `switch`, `light`.
 
 - **[homeassistant_client.py](src/ha_integration_test_harness/homeassistant_client.py)** — REST +
   WebSocket API client. Key methods: `set_state()`, `get_state()`, `remove_entity()`,
   `call_action()`, `assert_entity_state()` (polls until match or timeout), `given_an_entity()`
-  (creates + tracks for auto-cleanup). WebSocket used for entity registry updates (areas, labels).
+  (creates registered entity via `ha_test_harness` WebSocket + tracks for auto-cleanup).
+  Routing: entities in `_created_entities` → WebSocket (`ha_test_harness`) for state/delete;
+  others → REST fallback. WebSocket also used for entity registry updates (areas, labels).
 
 - **[time_machine.py](src/ha_integration_test_harness/time_machine.py)** — Manipulates time via
   libfaketime. **Time can only move forward, never backward.** Session-scoped — clock persists
@@ -84,11 +94,18 @@ via example tests in `examples/` against real containers. CI mirrors `./run_chec
 
 ## Writing Tests
 
-**Prefer `given_an_entity()` for auto-cleanup:**
+**Prefer `given_an_entity()` for test entities** — creates registered entities (have `unique_id`, appear
+in the HA UI) and tracks them for auto-cleanup. Supported domains: `sensor`, `binary_sensor`,
+`switch`, `light`. Can be combined with `given_entity_has()` in the same test:
 
 ```python
 home_assistant.given_an_entity("sensor.test", "42", attributes={"unit_of_measurement": "°C"})
+home_assistant.given_an_entity("light.test", "off")
+home_assistant.given_entity_has("light.test", area="living_room", labels=["night_mode"])
 ```
+
+**Use `set_state()` only for raw state injection** (e.g. providing a synthetic reading that an automation
+consumes). REST-injected entities are not registered in the entity registry and cannot be used with `given_entity_has()`.
 
 **Use `call_action()` for derived entities** (template sensors, lights backed by `input_boolean`) —
 `set_state()` has no effect on derived entities since HA recomputes them from the source.
