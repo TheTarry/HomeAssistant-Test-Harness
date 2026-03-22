@@ -185,9 +185,6 @@ class TimeMachine:
         # Ambiguous hour (fall-back): the local time occurs twice.
         # Prefer the first occurrence (fold=0, DST/pre-transition).
         # If that is already in the past, use the second (fold=1, standard-time).
-        # Ambiguous hour (fall-back): the local time occurs twice.
-        # Prefer the first occurrence (fold=0, DST/pre-transition).
-        # If that is already in the past, use the second (fold=1, standard-time).
         # If both are in the past, utc1 is returned; the caller is responsible for
         # detecting this and retrying on the next valid date.
         return utc0 if utc0 > current_time else utc1
