@@ -14,17 +14,13 @@ repos:
     hooks:
       - id: pyproject-flake8
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.0
+    rev: v1.19.1
     hooks:
       - id: mypy
-        language_version: python3.12
-        args: [--config-file=pyproject.toml]
-        additional_dependencies:
-          - requests
-          - types-requests
-          - types-python-dateutil
-          - PyYAML
-          - types-PyYAML
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
 
   # General
   - repo: https://github.com/markdownlint/markdownlint

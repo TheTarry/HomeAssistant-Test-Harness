@@ -185,10 +185,12 @@ class DockerComposeManager:
         return entity_file.absolute()
 
     def _stage_ha_config_with_entities(self) -> Path:
-        """Stage Home Assistant config directory with persistent entities overlay.
+        """Stage Home Assistant config directory with bundled integration and optional entities overlay.
 
-        Creates a temporary copy of the HA config directory, copies the persistent
-        entities YAML file, and patches configuration.yaml to reference it via
+        Creates a temporary copy of the HA config directory, injects the bundled
+        ha_test_harness custom integration, and appends the ha_test_harness key to
+        configuration.yaml. If persistent entities are configured, also copies the
+        entities YAML file and patches configuration.yaml to reference it via
         `homeassistant.packages.test_harness`.
 
         Returns:
@@ -197,9 +199,6 @@ class DockerComposeManager:
         Raises:
             PersistentEntityError: If staging fails.
         """
-        if not self._persistent_entities_path:
-            return self._ha_config_root
-
         # Create temporary staging directory
         staging_dir = Path(tempfile.mkdtemp(prefix="ha_test_config_"))
         logger.debug(f"Staging HA config to: {staging_dir}")
@@ -217,15 +216,22 @@ class DockerComposeManager:
                 else:
                     shutil.copy2(src, dst)
 
-            # Copy persistent entities YAML file into staged config root with a unique name
-            # to avoid collisions with any existing files in the HA config directory.
-            entities_filename = f"_harness_persistent_entities_{uuid.uuid4().hex}.yaml"
-            staged_entities_file = staging_dir / entities_filename
-            shutil.copy2(self._persistent_entities_path, staged_entities_file)
-            logger.debug(f"Copied persistent entities file to: {staged_entities_file}")
+            # Inject the bundled ha_test_harness custom integration
+            self._inject_custom_integration(staging_dir)
 
-            # Patch configuration.yaml to include the entities file
-            self._patch_configuration_yaml(staging_dir, entities_filename)
+            # Append ha_test_harness: top-level key to configuration.yaml (idempotent)
+            self._inject_ha_test_harness_config(staging_dir)
+
+            if self._persistent_entities_path:
+                # Copy persistent entities YAML file into staged config root with a unique name
+                # to avoid collisions with any existing files in the HA config directory.
+                entities_filename = f"_harness_persistent_entities_{uuid.uuid4().hex}.yaml"
+                staged_entities_file = staging_dir / entities_filename
+                shutil.copy2(self._persistent_entities_path, staged_entities_file)
+                logger.debug(f"Copied persistent entities file to: {staged_entities_file}")
+
+                # Patch configuration.yaml to include the entities file
+                self._patch_configuration_yaml(staging_dir, entities_filename)
 
             self._staged_ha_config_root = staging_dir
             success = True
@@ -479,6 +485,51 @@ class DockerComposeManager:
         except OSError as e:
             raise PersistentEntityError(f"Failed to patch homeassistant include file {include_file.name}: {e}")
 
+    def _inject_custom_integration(self, staging_dir: Path) -> None:
+        """Copy the bundled ha_test_harness custom integration into the staged config directory.
+
+        Args:
+            staging_dir: Root directory of staged HA config.
+
+        Raises:
+            PersistentEntityError: If copying the integration fails.
+        """
+        src = Path(__file__).parent / "custom_components" / "ha_test_harness"
+        dst = staging_dir / "custom_components" / "ha_test_harness"
+        try:
+            dst.parent.mkdir(exist_ok=True)
+            if dst.exists():
+                logger.warning(
+                    f"Staged config already contains a 'custom_components/ha_test_harness' directory at {dst}. "
+                    "It will be overwritten by the bundled ha_test_harness integration. "
+                    "Rename or remove the existing directory if this is not intended."
+                )
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+            logger.debug(f"Injected ha_test_harness custom integration into: {dst}")
+        except (OSError, shutil.Error) as e:
+            raise PersistentEntityError(f"Failed to inject ha_test_harness custom integration: {e}")
+
+    def _inject_ha_test_harness_config(self, staging_dir: Path) -> None:
+        """Append 'ha_test_harness:' top-level key to configuration.yaml if not already present.
+
+        Args:
+            staging_dir: Root directory of staged HA config.
+
+        Raises:
+            PersistentEntityError: If patching configuration.yaml fails.
+        """
+        config_file = staging_dir / "configuration.yaml"
+        try:
+            content = config_file.read_text()
+            # Use a line-anchored regex to avoid matching commented-out lines (e.g. "# ha_test_harness:").
+            if not re.search(r"^ha_test_harness:", content, re.MULTILINE):
+                # Direct write is acceptable here: this is a staging directory that nothing else is
+                # reading concurrently — the file is written once before containers start.
+                config_file.write_text(content.rstrip() + "\n\nha_test_harness:\n")
+                logger.debug("Appended ha_test_harness: to configuration.yaml")
+        except OSError as e:
+            raise PersistentEntityError(f"Failed to inject ha_test_harness config into configuration.yaml: {e}")
+
     def _detect_ha_config_root(self) -> Path:
         """Detect the Home Assistant configuration root directory.
 
@@ -529,8 +580,9 @@ class DockerComposeManager:
         - Starts AppDaemon on localhost:5050
         - Waits for AppDaemon to be healthy (via healthcheck)
 
-        If persistent entities are configured, stages the Home Assistant config
-        directory with the entities overlay before starting containers.
+        Always stages the Home Assistant config directory to inject the bundled
+        ha_test_harness custom integration, and also applies the persistent entities
+        overlay if persistent entities are configured.
 
         Raises:
             DockerError: If the docker compose command fails or if the services
@@ -539,11 +591,9 @@ class DockerComposeManager:
         """
         logger.debug("Starting docker-compose test environment...")
         try:
-            # Stage config with persistent entities if provided
-            if self._persistent_entities_path:
-                config_root = self._stage_ha_config_with_entities()
-            else:
-                config_root = self._ha_config_root
+            # Always stage config to inject the bundled ha_test_harness integration
+            # (and persistent entities overlay if configured).
+            config_root = self._stage_ha_config_with_entities()
 
             # Set environment variables for docker-compose to mount the configuration directories
             env = os.environ.copy()

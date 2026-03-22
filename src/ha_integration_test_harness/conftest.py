@@ -15,14 +15,15 @@ logger = logging.getLogger(__name__)
 
 # Session-level flag to capture diagnostics only once
 _diagnostics_captured = False
+_failure_key: pytest.StashKey[bool] = pytest.StashKey()
 
 
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> None:
     """Pytest hook to detect test failures and mark for diagnostics capture."""
     if call.when == "call" and call.excinfo is not None:
         # Test failed - mark in session stash
-        if not hasattr(item.session, "_test_failure_detected"):
-            item.session._test_failure_detected = True
+        if not item.session.stash.get(_failure_key, False):
+            item.session.stash[_failure_key] = True
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -39,7 +40,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-@pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
+@pytest.fixture(scope="session")
 def docker(request: pytest.FixtureRequest) -> Generator[DockerComposeManager, None, None]:
     """Provide Docker Compose manager for integration tests.
 
@@ -91,7 +92,7 @@ def docker(request: pytest.FixtureRequest) -> Generator[DockerComposeManager, No
         if manager is not None:
             # Capture diagnostics if any failures detected
             test_failures = request.session.testsfailed > 0
-            hook_failures = getattr(request.session, "_test_failure_detected", False)
+            hook_failures = request.session.stash.get(_failure_key, False)
             container_failure = not manager.containers_healthy()
 
             if (test_failures or hook_failures or container_failure) and not _diagnostics_captured:
@@ -102,7 +103,7 @@ def docker(request: pytest.FixtureRequest) -> Generator[DockerComposeManager, No
             manager.stop()
 
 
-@pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
+@pytest.fixture(scope="session")
 def home_assistant(docker: DockerComposeManager) -> HomeAssistant:
     """Provide Home Assistant API client for integration tests.
 
@@ -121,7 +122,7 @@ def home_assistant(docker: DockerComposeManager) -> HomeAssistant:
     return HomeAssistant(base_url, access_token)
 
 
-@pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
+@pytest.fixture(scope="session")
 def app_daemon(docker: DockerComposeManager) -> AppDaemon:
     """Provide AppDaemon API client for integration tests.
 
@@ -139,7 +140,7 @@ def app_daemon(docker: DockerComposeManager) -> AppDaemon:
     return AppDaemon(base_url)
 
 
-@pytest.fixture(scope="session")  # type: ignore[untyped-decorator]
+@pytest.fixture(scope="session")
 def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) -> TimeMachine:
     """Provide time machine for integration tests.
 
@@ -169,7 +170,7 @@ def time_machine(docker: DockerComposeManager, home_assistant: HomeAssistant) ->
     # No teardown: time cannot be reset and persists across tests in the session
 
 
-@pytest.fixture(autouse=True)  # type: ignore[untyped-decorator]
+@pytest.fixture(autouse=True)
 def _cleanup_test_entities(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     """Auto-cleanup fixture that removes test entities and restores entity config after each test.
 

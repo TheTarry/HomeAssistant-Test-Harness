@@ -17,7 +17,8 @@ dist/
 .storage/
 blueprints/
 tts/
-custom_components/
+custom_components/*
+!custom_components/ha_test_harness/
 image/
 www/
 .HA_VERSION
@@ -31,6 +32,7 @@ shared_data/
 
 # Local workspace
 .env
+.env.backup
 
 # Package build artifacts
 *.egg

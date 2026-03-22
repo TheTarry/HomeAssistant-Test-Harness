@@ -19,10 +19,10 @@ def test_entity_state_with_manual_cleanup(home_assistant: HomeAssistant) -> None
 def test_entity_state_with_auto_cleanup(home_assistant: HomeAssistant) -> None:
     """Test setting and getting entity states with automatic cleanup."""
     # Use given_an_entity for automatic cleanup
-    home_assistant.given_an_entity("input_boolean.test_flag_auto", "on")
+    home_assistant.given_an_entity("switch.test_flag_auto", "on")
 
     # Verify state
-    state = home_assistant.get_state("input_boolean.test_flag_auto")
+    state = home_assistant.get_state("switch.test_flag_auto")
     assert state["state"] == "on"
 
     # No manual cleanup needed - entity will be automatically removed after test
