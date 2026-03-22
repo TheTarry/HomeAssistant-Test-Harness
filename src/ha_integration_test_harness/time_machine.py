@@ -2,7 +2,9 @@
 
 import logging
 from datetime import datetime, timedelta
+from datetime import timezone as _stdlib_timezone
 from typing import Any, Callable, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil.relativedelta import relativedelta
 
@@ -76,6 +78,7 @@ class TimeMachine:
         apply_faketime: Callable[[str], None],
         on_time_set: Optional[Callable[[], None]] = None,
         get_entity_state: Optional[Callable[[str], Optional[dict[str, Any]]]] = None,
+        timezone: Optional[str] = None,
     ) -> None:
         """Initialize the time machine.
 
@@ -83,11 +86,27 @@ class TimeMachine:
             apply_faketime: Callback to apply faketime configuration (receives time string).
             on_time_set: Optional callback to invoke after setting time (e.g., token regeneration).
             get_entity_state: Optional callback to get entity state (e.g., for sunrise/sunset times).
+            timezone: IANA timezone name (e.g. "Europe/London") used by ``jump_to_next`` to
+                interpret ``hour``/``minute``/``second`` arguments as local wall-clock time.
+                When ``None`` (the default), those arguments are treated as UTC.
+                Typically set to the timezone configured in Home Assistant so that test
+                arguments match the HA automations being tested.
+
+        Raises:
+            ValueError: If ``timezone`` is provided but is not a valid IANA timezone name.
         """
         self._apply_faketime = apply_faketime
         self._on_time_set = on_time_set
         self._get_entity_state = get_entity_state
         self._fake_time: Optional[datetime] = None
+
+        if timezone is not None:
+            try:
+                self._tz: Optional[ZoneInfo] = ZoneInfo(timezone)
+            except (ZoneInfoNotFoundError, KeyError) as e:
+                raise ValueError(f"Invalid timezone '{timezone}': {e}. Use a valid IANA timezone name such as 'Europe/London' or 'America/New_York'.")
+        else:
+            self._tz = None
 
     def _get_current_time(self) -> datetime:
         """Get current fake time, initializing lazily if needed.
@@ -96,12 +115,77 @@ class TimeMachine:
             Current fake time as a datetime object.
         """
         if self._fake_time is None:
-            # Lazy initialization: use current time on first operation
+            # Lazy initialization: use current UTC time on first operation.
             # This only works if the container's initial fake time is set to "+0"
-            # (i.e., start with real current time).
-            self._fake_time = datetime.now().replace(microsecond=0)
-            logger.debug(f"Initialized fake time from host clock (fallback): {self._fake_time}")
+            # (i.e., start with real current time). UTC is used explicitly to avoid
+            # a 1-hour offset when the host machine is observing DST.
+            self._fake_time = datetime.now(_stdlib_timezone.utc).replace(tzinfo=None, microsecond=0)
+            logger.debug(f"Initialized fake time from host UTC clock (fallback): {self._fake_time}")
         return self._fake_time
+
+    def _local_time_to_utc(self, reference_utc: datetime, hour: Optional[int], minute: Optional[int], second: Optional[int], current_time: datetime) -> datetime:
+        """Apply hour/minute/second constraints in the configured local timezone, returning naive UTC.
+
+        Converts ``reference_utc`` to local time, applies the supplied h/m/s constraints, then
+        converts back to naive UTC with full DST handling:
+
+        - **Non-existent hour** (spring-forward gap): raises ``ValueError``.
+        - **Ambiguous hour** (fall-back): returns the first occurrence (fold=0) if it is still in
+          the future relative to ``current_time``, otherwise returns the second occurrence (fold=1).
+
+        Args:
+            reference_utc: Naive UTC datetime whose *date* establishes the target local date.
+            hour: Target local hour (already range-validated by the caller), or None to preserve.
+            minute: Target local minute (already range-validated by the caller), or None to preserve.
+            second: Target local second (already range-validated by the caller), or None to preserve.
+            current_time: Current naive UTC fake time used for ambiguous-hour resolution.
+
+        Returns:
+            Naive UTC datetime representing the requested local wall-clock time.
+
+        Raises:
+            ValueError: If the resulting local time does not exist on the target date (spring-forward gap).
+        """
+        assert self._tz is not None  # Caller must check self._tz is set before calling this method
+
+        # Convert the reference UTC datetime to local time to determine the target local date.
+        # The time components of local_naive are overwritten below; only the date is meaningful here.
+        local_naive = reference_utc.replace(tzinfo=_stdlib_timezone.utc).astimezone(self._tz).replace(tzinfo=None)
+
+        if hour is not None:
+            local_naive = local_naive.replace(hour=hour)
+        if minute is not None:
+            local_naive = local_naive.replace(minute=minute)
+        if second is not None:
+            local_naive = local_naive.replace(second=second)
+
+        # Detect non-existent hour (spring-forward gap).
+        # Attaching the timezone with fold=0 and round-tripping back to local will return a
+        # different wall-clock time if the hour doesn't exist (the UTC instant maps to a time
+        # after the gap was skipped).
+        dt_aware_f0 = local_naive.replace(tzinfo=self._tz, fold=0)
+        back_local = dt_aware_f0.astimezone(self._tz)
+        if back_local.hour != local_naive.hour or back_local.minute != local_naive.minute or back_local.second != local_naive.second:
+            tz_name = self._tz.key or str(self._tz)
+            raise ValueError(
+                f"The time {local_naive.strftime('%H:%M:%S')} does not exist on "
+                f"{local_naive.strftime('%Y-%m-%d')} in timezone {tz_name}: "
+                f"clocks spring forward past this time. Use a time outside the gap, "
+                f"or use fast_forward() to advance to the exact moment you need."
+            )
+
+        # Compute the UTC equivalent for both fold=0 and fold=1.
+        utc0 = dt_aware_f0.astimezone(_stdlib_timezone.utc).replace(tzinfo=None)
+        utc1 = local_naive.replace(tzinfo=self._tz, fold=1).astimezone(_stdlib_timezone.utc).replace(tzinfo=None)
+
+        if utc0 == utc1:
+            # Unambiguous: one unique UTC instant.
+            return utc0
+
+        # Ambiguous hour (fall-back): the local time occurs twice.
+        # Prefer the first occurrence (fold=0, DST/pre-transition).
+        # If that is already in the past, use the second (fold=1, standard-time).
+        return utc0 if utc0 > current_time else utc1
 
     def _set_time(self, target_dt: datetime, log_message: str, error_message_prefix: str) -> None:
         """Apply time change to faketime and update internal state.
@@ -228,8 +312,30 @@ class TimeMachine:
             # Step 1: Set to Feb 1 14:30:00 (day_of_month=1, but Feb 1 is Saturday)
             # Step 2: Advance to next Monday -> Feb 3 14:30:00
 
+        **Timezone behaviour:**
+        When the ``TimeMachine`` was constructed with a ``timezone`` (e.g. ``"Europe/London"``),
+        ``hour``, ``minute``, and ``second`` are interpreted as **local wall-clock time** in that
+        timezone. The internal fake time is always stored and written to the container as naive UTC,
+        so the conversion from local time → UTC is handled automatically — callers do not need to
+        know whether DST is currently active.
+
+        When no ``timezone`` was configured, ``hour``/``minute``/``second`` are applied as UTC
+        (the legacy behaviour).
+
+        **DST edge cases (when timezone is configured):**
+
+        - **Non-existent hour** (spring-forward gap, e.g. ``hour=1, minute=30`` in Europe/London on
+          the spring-forward date): ``ValueError`` is raised with a message explaining which hour
+          is skipped and on which date.
+        - **Ambiguous hour** (fall-back, e.g. ``hour=1, minute=30`` on the fall-back date, which
+          occurs twice): the first occurrence (pre-transition, DST) is chosen if it has not yet
+          passed; otherwise the second occurrence (post-transition, standard time) is used. This
+          ensures the ``jump_to_next`` always lands on the *next* upcoming occurrence of the
+          requested local time.
+
         Raises:
-            ValueError: If month/day names are invalid or numeric values out of range.
+            ValueError: If month/day names are invalid, numeric values are out of range, or the
+                requested hour does not exist in the configured timezone on the target date.
             TimeMachineError: If time manipulation fails.
         """
         current_time = self._get_current_time()
@@ -313,31 +419,56 @@ class TimeMachine:
             if days_ahead > 0:
                 target_dt = target_dt + timedelta(days=days_ahead)
 
-        # Step 4: Apply time constraints (hour/minute/second) if specified
-        if hour is not None:
-            if not 0 <= hour <= 23:
-                raise ValueError(f"Invalid hour '{hour}'. Must be between 0 and 23.")
-            target_dt = target_dt.replace(hour=hour)
+        # Step 4: Apply time constraints (hour/minute/second) if specified.
+        #
+        # When self._tz is set, hour/minute/second are interpreted as local wall-clock
+        # time in that timezone and the result is converted to naive UTC for storage.
+        # This ensures callers always reason in local time regardless of DST state.
+        #
+        # When self._tz is None, the arguments are applied directly as UTC (legacy behaviour).
 
-        if minute is not None:
-            if not 0 <= minute <= 59:
-                raise ValueError(f"Invalid minute '{minute}'. Must be between 0 and 59.")
-            target_dt = target_dt.replace(minute=minute)
+        # Validate ranges up-front regardless of timezone mode
+        if hour is not None and not 0 <= hour <= 23:
+            raise ValueError(f"Invalid hour '{hour}'. Must be between 0 and 23.")
+        if minute is not None and not 0 <= minute <= 59:
+            raise ValueError(f"Invalid minute '{minute}'. Must be between 0 and 59.")
+        if second is not None and not 0 <= second <= 59:
+            raise ValueError(f"Invalid second '{second}'. Must be between 0 and 59.")
 
-        if second is not None:
-            if not 0 <= second <= 59:
-                raise ValueError(f"Invalid second '{second}'. Must be between 0 and 59.")
-            target_dt = target_dt.replace(second=second)
+        time_args_specified = any(x is not None for x in (hour, minute, second))
 
-        # Check if time constraints resulted in a time that's not in the future
-        # If so, advance to the next valid occurrence at the specified time
-        if target_dt <= current_time:
-            if day is not None:
-                # Preserve the requested weekday by advancing a full week
-                target_dt = target_dt + timedelta(days=7)
-            else:
-                # No weekday constraint: just move to the next day
-                target_dt = target_dt + timedelta(days=1)
+        if time_args_specified and self._tz is not None:
+            # --- Timezone-aware path ---
+            # Apply h/m/s in local time with full DST handling (non-existent / ambiguous hours).
+            target_dt = self._local_time_to_utc(target_dt, hour, minute, second, current_time)
+
+            # Forward-only check: if the resulting UTC is still in the past, the target
+            # local time has already passed today — advance by one local day (or a full week
+            # to preserve a weekday constraint), then redo the full DST-aware conversion for the
+            # new date so non-existent and ambiguous hours on the retry date are also handled.
+            if target_dt <= current_time:
+                days_to_add = 7 if day is not None else 1
+                next_day_utc = target_dt + timedelta(days=days_to_add)
+                target_dt = self._local_time_to_utc(next_day_utc, hour, minute, second, current_time)
+
+        else:
+            # --- UTC path (legacy behaviour when no timezone is configured) ---
+            if hour is not None:
+                target_dt = target_dt.replace(hour=hour)
+            if minute is not None:
+                target_dt = target_dt.replace(minute=minute)
+            if second is not None:
+                target_dt = target_dt.replace(second=second)
+
+            # Check if time constraints resulted in a time that's not in the future.
+            # If so, advance to the next valid occurrence at the specified time.
+            if target_dt <= current_time:
+                if day is not None:
+                    # Preserve the requested weekday by advancing a full week
+                    target_dt = target_dt + timedelta(days=7)
+                else:
+                    # No weekday constraint: just move to the next day
+                    target_dt = target_dt + timedelta(days=1)
 
         # Apply time change
         time_str = target_dt.strftime("%Y-%m-%d %H:%M:%S")

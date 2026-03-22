@@ -36,6 +36,7 @@ Home Assistant API client with automatic authentication and retry logic.
 ```python
 home_assistant.set_state(entity_id: str, state: str, attributes: dict = None) -> None
 home_assistant.get_state(entity_id: str) -> dict
+home_assistant.get_config() -> dict
 home_assistant.assert_entity_state(entity_id: str, expected_state: str | Callable[[str], bool] | None = None, expected_attributes: dict = None, timeout: int = 5) -> None
 home_assistant.remove_entity(entity_id: str) -> None
 home_assistant.given_an_entity(entity_id: str, state: str, attributes: dict = None) -> None
@@ -96,6 +97,13 @@ Sets the state of an entity.
 #### `get_state(entity_id)`
 
 Returns entity state as a dictionary with `state`, `attributes`, `last_changed`, etc.
+
+#### `get_config()`
+
+Returns the Home Assistant configuration as a dictionary (from `GET /api/config`). Useful for
+reading runtime settings such as the configured timezone (`time_zone`), `latitude`, `longitude`,
+and `unit_system`. The `time_machine` fixture calls this automatically at session startup to
+determine the timezone for `jump_to_next` local-time conversions.
 
 #### `assert_entity_state(entity_id, expected_state=None, expected_attributes=None, timeout=5)`
 
@@ -373,14 +381,34 @@ Jumps to the next occurrence of specified calendar constraints. Constraints are 
 
 All parameters are optional. Unspecified time components (hour/minute/second) preserve their values from the current fake time.
 
+**Timezone and DST behaviour:**
+
+When the `time_machine` fixture is used through the harness, `hour`/`minute`/`second` are
+automatically interpreted as **local wall-clock time** in the timezone configured in Home Assistant
+(e.g. `Europe/London`). This means callers always reason in the same timezone as their automations,
+regardless of whether DST is currently active — the harness converts local time to UTC internally.
+
+DST transitions between the current fake time and the target are handled transparently:
+`jump_to_next(hour=20, minute=30)` always lands on 20:30 local time, even if a clock change
+occurs in between.
+
+**DST edge cases:**
+
+- **Non-existent hour** (spring-forward gap, e.g. `hour=1, minute=30` on the spring-forward date):
+  raises `ValueError` with a clear message — those minutes simply do not exist in the local timezone
+  on that date.
+- **Ambiguous hour** (fall-back, e.g. `hour=1, minute=30` on the fall-back date, which occurs
+  twice): the *next* upcoming occurrence is chosen — the first (DST) occurrence is preferred; if it
+  has already passed, the second (standard-time) occurrence is used instead.
+
 **Parameters:**
 
 - **month**: Month name ("Jan"/"January") or 3-char abbreviation (case-insensitive)
 - **day**: Weekday name ("Mon"/"Monday") or 3-char abbreviation (case-insensitive)
 - **day_of_month**: Day of the month (1-31). Applied after month, before weekday
-- **hour**: Hour of day (0-23). Preserves current hour if omitted
-- **minute**: Minute (0-59). Preserves current minute if omitted
-- **second**: Second (0-59). Preserves current second if omitted
+- **hour**: Hour of day (0-23), in local timezone. Preserves current hour if omitted
+- **minute**: Minute (0-59), in local timezone. Preserves current minute if omitted
+- **second**: Second (0-59), in local timezone. Preserves current second if omitted
 
 **Examples:**
 
@@ -427,7 +455,7 @@ time_machine.jump_to_next(month="Feb", day_of_month=1, day="Monday")
 
 **Raises:**
 
-- `ValueError`: If month/day names are invalid or numeric values out of range
+- `ValueError`: If month/day names are invalid, numeric values are out of range, or the requested hour does not exist in the configured timezone on the target date (spring-forward gap)
 - `TimeMachineError`: If result would not be in the future or manipulation fails
 
 #### `advance_to_preset(preset, offset=None)`
@@ -513,9 +541,12 @@ time_machine.fast_forward(timedelta(seconds=60))
 time_machine.fast_forward(timedelta(seconds=3, milliseconds=500))  # Can only advance by whole seconds
 ```
 
-#### Timezone is Fixed
+#### Timezone Mirrors Home Assistant Configuration
 
-All tests use `Europe/London` timezone. You cannot change the timezone during a test.
+The `time_machine` fixture reads the configured timezone from Home Assistant (`GET /api/config`) at
+session startup and uses it for all `jump_to_next` local-time conversions. You cannot change the
+timezone during a test session — it is determined by the Home Assistant configuration and is fixed
+for the lifetime of the session.
 
 #### Shared Clock Across Containers
 
