@@ -54,4 +54,4 @@ automation:
     action:
       - action: light.turn_on
         target:
-          entity_id: "{{ area_entities('living_room') }}"
+          entity_id: "{{ area_entities('test_room') }}"

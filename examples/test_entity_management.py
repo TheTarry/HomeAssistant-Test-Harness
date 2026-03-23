@@ -22,178 +22,156 @@ To use persistent entities:
    ha_persistent_entities_path = "path/to/entities.yaml"
 """
 
+import pytest
+
 from ha_integration_test_harness import HomeAssistant
 
 
-def test_given_an_entity_with_auto_cleanup(home_assistant: HomeAssistant) -> None:
-    """Test that entities created via given_an_entity() are automatically cleaned up."""
-    home_assistant.given_an_entity("switch.test_auto_cleanup", "on")
+class TestEntitiesManagedByTests:
 
-    state = home_assistant.get_state("switch.test_auto_cleanup")
-    assert state is not None
-    assert state["state"] == "on"
+    supported_domains = ["sensor", "binary_sensor", "switch", "light"]
+    test_entities = [f"{domain}.per_test_entity" for domain in supported_domains]
 
-    # No manual cleanup needed - the fixture will handle it automatically!
+    @pytest.fixture(autouse=True)
+    def create_test_entities(self, home_assistant: HomeAssistant) -> None:
+        """Create the test entities."""
+        for entity in self.test_entities:
+            home_assistant.given_an_entity(entity, state="off", attributes={"attr_key": "attr_val"})
+        # No manual cleanup needed - the fixture will handle it automatically!
 
+    def test_read_state_of_created_entities(self, home_assistant: HomeAssistant) -> None:
+        """Test that state of entities created via given_an_entity() can be read back."""
+        # All created entities are available to read back
+        for entity in self.test_entities:
+            home_assistant.assert_entity_state(entity, expected_state="off", expected_attributes={"attr_key": "attr_val"})
 
-def test_multiple_entities_with_auto_cleanup(home_assistant: HomeAssistant) -> None:
-    """Test that multiple entities are all cleaned up automatically."""
-    home_assistant.given_an_entity("switch.test_1", "on")
-    home_assistant.given_an_entity("switch.test_2", "off")
-    home_assistant.given_an_entity("sensor.test_sensor", "42", attributes={"unit_of_measurement": "°C"})
+    def test_entity_created_multiple_times_overwrites_state(self, home_assistant: HomeAssistant) -> None:
+        """Test that updating an entity via given_an_entity() doesn't create duplicates."""
+        sample_entity = self.test_entities[0]
+        # Re-create the same entity but with updated state and attributes
+        home_assistant.given_an_entity(sample_entity, "on", attributes={"updated": True})
 
-    assert home_assistant.get_state("switch.test_1")["state"] == "on"
-    assert home_assistant.get_state("switch.test_2")["state"] == "off"
-    sensor_state = home_assistant.get_state("sensor.test_sensor")
-    assert sensor_state["state"] == "42"
-    assert sensor_state["attributes"]["unit_of_measurement"] == "°C"
+        home_assistant.assert_entity_state(sample_entity, expected_state="on", expected_attributes={"updated": True})
 
-    # All entities will be automatically cleaned up after this test
+    def test_entity_creation_within_test_function(self, home_assistant: HomeAssistant) -> None:
+        """Test that entities can be created via given_an_entity() during test functions."""
+        entity_id = "switch.entity_created_within_test_function"
+        # Test entities created in this way would still be automatically cleaned up
+        home_assistant.given_an_entity(entity_id, "on")
+        home_assistant.assert_entity_state(entity_id, expected_state="on")
 
+    def test_entities_can_be_removed(self, home_assistant: HomeAssistant) -> None:
+        """Test that entities can be removed via remove_entity() during test functions."""
+        sample_entity = self.test_entities[0]
+        # Verify entity state can be read
+        home_assistant.assert_entity_state(sample_entity, expected_state="off")
 
-def test_entity_update_tracked_correctly(home_assistant: HomeAssistant) -> None:
-    """Test that updating an entity via given_an_entity() doesn't create duplicates."""
-    home_assistant.given_an_entity("switch.test_update", "on")
+        home_assistant.remove_entity(sample_entity)
 
-    # Update the same entity — should update in place, not create a duplicate
-    home_assistant.given_an_entity("switch.test_update", "off", attributes={"updated": "true"})
-
-    state = home_assistant.get_state("switch.test_update")
-    assert state["state"] == "off"
-    assert state["attributes"]["updated"] == "true"
-
-    # The entity should only be tracked once and cleaned up once
-
-
-def test_mixing_given_an_entity_with_manual_cleanup(home_assistant: HomeAssistant) -> None:
-    """Test that manual cleanup still works alongside auto-cleanup."""
-    # Create a registered entity via given_an_entity (auto-cleanup)
-    home_assistant.given_an_entity("switch.auto_cleanup", "on")
-
-    # Inject a raw state via REST (manual cleanup required, entity is NOT registry-registered)
-    home_assistant.set_state("sensor.manual_cleanup", "42")
-
-    assert home_assistant.get_state("switch.auto_cleanup")["state"] == "on"
-    assert home_assistant.get_state("sensor.manual_cleanup")["state"] == "42"
-
-    # Manually clean up the REST-injected entity
-    home_assistant.remove_entity("sensor.manual_cleanup")
-
-    assert home_assistant.get_state("sensor.manual_cleanup") is None
-
-    # The switch entity will be cleaned up automatically
+        # Confirm the entity no longer exists in the state machine
+        assert home_assistant.get_state(sample_entity) is None
 
 
-def test_persistent_entities_available_with_expected_initial_state(home_assistant: HomeAssistant) -> None:
-    """Test that persistent entities exist and have expected initial state.
+class TestEntitiesWithAreasAndLabels:
 
-    This test demonstrates that persistent entities (defined via the
-    ha_persistent_entities_path configuration) are registered during
-    container startup, available to all tests, and initialized to expected
-    values from persistent_entities.yaml.
-    """
-    home_assistant.assert_entity_state("input_boolean.guest_mode", "off")
-    home_assistant.assert_entity_state("input_number.target_temperature", "20.0")
-    home_assistant.assert_entity_state("input_select.house_mode", "Home")
-    home_assistant.assert_entity_state("counter.doorbell_presses", "0")
-    home_assistant.assert_entity_state("light.living_room_lamp", "off")
-    home_assistant.assert_entity_state("switch.garage_door", "off")
+    light_entity = "light.test_light_entity"
 
-    guest_mode = home_assistant.get_state("input_boolean.guest_mode")
-    assert guest_mode["attributes"]["icon"] == "mdi:account-group"
+    @pytest.fixture(autouse=True)
+    def create_test_entities(self, home_assistant: HomeAssistant) -> None:
+        """Create the test entity."""
+        home_assistant.given_an_entity(self.light_entity, state="off")
+        # Assign an area and a label to the newly created entity
+        home_assistant.given_entity_has(self.light_entity, area="test_room", labels=["test_label_target"])
 
-    temperature = home_assistant.get_state("input_number.target_temperature")
-    assert float(temperature["attributes"]["min"]) == 10
-    assert float(temperature["attributes"]["max"]) == 30
+    def test_given_an_entity_then_assign_area_and_label(self, home_assistant: HomeAssistant) -> None:
+        """Test that an entity created via given_an_entity() supports area and label assignment.
 
-    house_mode = home_assistant.get_state("input_select.house_mode")
-    assert "Home" in house_mode["attributes"]["options"]
-    assert "Away" in house_mode["attributes"]["options"]
+        Because given_an_entity() registers entities in the HA entity registry (with a
+        unique_id), they can be targeted by given_entity_has() in the same test — a
+        combination that was not possible with REST-based entity creation.
+        """
+        # Entity state should still be readable after registry updates
+        home_assistant.assert_entity_state(self.light_entity, "off")
 
+    def test_label_based_automation(self, home_assistant: HomeAssistant) -> None:
+        """Test that a label-based automation turns on a light assigned the target label.
 
-def test_label_based_automation(home_assistant: HomeAssistant) -> None:
-    """Test that a label-based automation turns on a light assigned the target label.
+        An automation in configuration.yaml fires when input_button.label_automation_trigger
+        is pressed and turns on all entities carrying the 'test_label_target' label.
 
-    An automation in configuration.yaml fires when input_button.label_automation_trigger
-    is pressed and turns on all entities carrying the 'test_label_target' label.
+        This test assigns that label to a light entity, presses the button,
+        and verifies the light turns on. The label is automatically restored to its
+        original value (no labels) after the test function completes.
+        """
+        # Ensure the light starts off before triggering the automation
+        home_assistant.assert_entity_state(self.light_entity, "off")
 
-    This test assigns that label to light.living_room_lamp, presses the button,
-    and verifies the light turns on.  The label is automatically restored to its
-    original value (no labels) after the test function completes.
-    """
-    # Assign the target label to the persistent light entity
-    home_assistant.given_entity_has("light.living_room_lamp", labels=["test_label_target"])
+        # Press the button — triggers the automation that uses label-based targeting
+        home_assistant.call_action("input_button", "press", {"entity_id": "input_button.label_automation_trigger"})
 
-    # Ensure the light starts off before triggering the automation
-    home_assistant.assert_entity_state("light.living_room_lamp", "off")
+        # The automation should turn on the light that carries the label
+        home_assistant.assert_entity_state(self.light_entity, "on")
 
-    # Press the button — triggers the automation that uses label-based targeting
-    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.label_automation_trigger"})
+    def test_area_based_automation(self, home_assistant: HomeAssistant) -> None:
+        """Test that an area-based automation turns on a light assigned to the target area.
 
-    # The automation should turn on the light that carries the label
-    home_assistant.assert_entity_state("light.living_room_lamp", "on", timeout=10)
+        An automation in configuration.yaml fires when input_button.area_automation_trigger
+        is pressed and turns on all lights in the 'test_room' area.
 
-    # Restore light state for subsequent tests (persistent entity — not auto-cleaned up)
-    home_assistant.call_action("light", "turn_off", {"entity_id": "light.living_room_lamp"})
-    home_assistant.assert_entity_state("light.living_room_lamp", "off", timeout=5)
+        This test assigns the 'test_room' area to a light entity, presses the
+        button, and verifies the light turns on. The area assignment is automatically
+        restored to its original value (no area) after the test function completes.
+        """
+        # Ensure the light starts off before triggering the automation
+        home_assistant.assert_entity_state(self.light_entity, "off")
 
+        # Press the button — triggers the automation that uses area-based targeting
+        home_assistant.call_action("input_button", "press", {"entity_id": "input_button.area_automation_trigger"})
 
-def test_given_an_entity_then_remove_entity(home_assistant: HomeAssistant) -> None:
-    """Test that an entity created via given_an_entity() can be explicitly removed.
-
-    Entities created via given_an_entity() are registered in the HA entity registry.
-    Calling remove_entity() removes them from both the state machine and the registry.
-    """
-    home_assistant.given_an_entity("sensor.test_removable", "42", attributes={"unit_of_measurement": "°C"})
-
-    # Confirm entity is visible
-    home_assistant.assert_entity_state("sensor.test_removable", "42")
-
-    # Explicitly remove the entity
-    home_assistant.remove_entity("sensor.test_removable")
-
-    # Entity should be gone from the state machine
-    assert home_assistant.get_state("sensor.test_removable") is None
+        # The automation should turn on the light that belongs to the area
+        home_assistant.assert_entity_state(self.light_entity, "on")
 
 
-def test_given_an_entity_then_assign_area_and_label(home_assistant: HomeAssistant) -> None:
-    """Test that an entity created via given_an_entity() supports area and label assignment.
+class TestPersistentEntities:
 
-    Because given_an_entity() registers entities in the HA entity registry (with a
-    unique_id), they can be targeted by given_entity_has() in the same test — a
-    combination that was not possible with the previous REST-based entity creation.
-    """
-    home_assistant.given_an_entity("light.test_area_label", "off")
+    def test_persistent_entities_available_with_expected_initial_state(self, home_assistant: HomeAssistant) -> None:
+        """Test that persistent entities exist and have expected initial state.
 
-    # Assign an area and a label to the newly created entity
-    home_assistant.given_entity_has("light.test_area_label", area="test_room", labels=["test_light"])
+        This test demonstrates that persistent entities (defined via the
+        ha_persistent_entities_path configuration) are registered during
+        container startup, available to all tests, and initialized to expected
+        values from persistent_entities.yaml.
+        """
+        home_assistant.assert_entity_state("counter.doorbell_presses", "0")
+        home_assistant.assert_entity_state("light.living_room_lamp", "off")
+        home_assistant.assert_entity_state("switch.garage_door", "off")
+        home_assistant.assert_entity_state("input_boolean.guest_mode", expected_state="off", expected_attributes={"icon": "mdi:account-group"})
+        home_assistant.assert_entity_state("input_number.target_temperature", expected_state="20.0", expected_attributes={"min": 10, "max": 30})
+        home_assistant.assert_entity_state("input_select.house_mode", expected_state="Home", expected_attributes={"options": ["Home", "Away", "Night"]})
 
-    # Entity state should still be readable after registry updates
-    home_assistant.assert_entity_state("light.test_area_label", "off")
 
+class TestCallHomeAssitantActions:
 
-def test_area_based_automation(home_assistant: HomeAssistant) -> None:
-    """Test that an area-based automation turns on a light assigned to the target area.
+    # Not all domains offer `turn_on`/`turn_off` action calls
+    supported_domains = ["switch", "light"]
 
-    An automation in configuration.yaml fires when input_button.area_automation_trigger
-    is pressed and turns on all lights in the 'living_room' area.
+    def test_call_domain_specific_turn_on_and_off_actions(self, home_assistant: HomeAssistant) -> None:
+        """Test calling a 'turn_on' action for a supported entity domain."""
+        for domain in self.supported_domains:
+            entity_id = f"{domain}.test_entity"
+            home_assistant.given_an_entity(entity_id, state="off")
 
-    This test assigns the 'living_room' area to light.living_room_lamp, presses the
-    button, and verifies the light turns on.  The area assignment is automatically
-    restored to its original value (no area) after the test function completes.
-    """
-    # Assign the light to the 'living_room' area
-    home_assistant.given_entity_has("light.living_room_lamp", area="living_room")
+            # Verify initial state is off
+            home_assistant.assert_entity_state(entity_id, "off")
 
-    # Ensure the light starts off before triggering the automation
-    home_assistant.assert_entity_state("light.living_room_lamp", "off")
+            # Call "Turn On" action
+            home_assistant.call_action(domain, "turn_on", {"entity_id": entity_id})
 
-    # Press the button — triggers the automation that uses area-based targeting
-    home_assistant.call_action("input_button", "press", {"entity_id": "input_button.area_automation_trigger"})
+            # Verify the entity was turned on
+            home_assistant.assert_entity_state(entity_id, "on")
 
-    # The automation should turn on the light that belongs to the area
-    home_assistant.assert_entity_state("light.living_room_lamp", "on", timeout=10)
+            # Call "Turn Off" action
+            home_assistant.call_action(domain, "turn_off", {"entity_id": entity_id})
 
-    # Restore light state for subsequent tests (persistent entity — not auto-cleaned up)
-    home_assistant.call_action("light", "turn_off", {"entity_id": "light.living_room_lamp"})
-    home_assistant.assert_entity_state("light.living_room_lamp", "off", timeout=5)
+            # Verify the entity was turned on
+            home_assistant.assert_entity_state(entity_id, "off")
