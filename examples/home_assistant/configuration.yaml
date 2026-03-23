@@ -54,4 +54,31 @@ automation:
     action:
       - action: light.turn_on
         target:
-          entity_id: "{{ area_entities('living_room') }}"
+          entity_id: "{{ area_entities('test_room') }}"
+
+  # Performance test infrastructure: introduces a 1-second delay whenever one of the
+  # reserved 'perf_test' sensor entities changes state.
+  #
+  # Purpose: discriminate between the buggy path (hass.async_block_till_done()) and
+  # the correct path (asyncio.sleep(0)) in ws_create_entity.
+  #
+  #   Bug  — ws_create_entity awaits async_block_till_done(), which gathers ALL asyncio
+  #          tasks including this sleeping automation.  Each entity creation therefore
+  #          blocks for ~1 s, making 5 creations take 5 s+.
+  #
+  #   Fix  — ws_create_entity yields once with asyncio.sleep(0) and returns.  The
+  #          automation runs in the background; entity creation takes ~100 ms.
+  #
+  # The entity IDs listed here are reserved exclusively for test_performance.py.
+  - id: perf_test_event_loop_probe
+    alias: "Performance test - event loop probe"
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.perf_test_0
+          - sensor.perf_test_1
+          - sensor.perf_test_2
+          - sensor.perf_test_3
+          - sensor.perf_test_4
+    action:
+      - delay: "00:00:01"

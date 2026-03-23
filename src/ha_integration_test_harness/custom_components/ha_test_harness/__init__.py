@@ -29,7 +29,7 @@ from homeassistant.helpers.typing import ConfigType
 from .entity import VirtualBinarySensorEntity, VirtualLightEntity, VirtualSensorEntity, VirtualToggleEntity
 
 DOMAIN = "ha_test_harness"
-SUPPORTED_DOMAINS = ["sensor", "binary_sensor", "input_boolean", "switch", "light"]
+SUPPORTED_DOMAINS = ["sensor", "binary_sensor", "switch", "light"]
 _PLATFORM_READY_TIMEOUT = 30  # seconds to wait for a platform callback to be registered
 
 _LOGGER = logging.getLogger(__name__)
@@ -141,8 +141,12 @@ async def ws_create_entity(hass: HomeAssistant, connection: websocket_api.Active
     entity = _create_virtual_entity(domain, unique_id, entity_id, state, attributes)
 
     hass.data[DOMAIN]["add_callbacks"][domain]([entity])
-    # Wait for the entity to be fully initialised in the HA event loop before responding.
-    await hass.async_block_till_done()
+    # Yield once to allow the entity's async_write_ha_state() call to propagate through
+    # the HA event loop without waiting for unrelated background tasks.  Using
+    # async_block_till_done() here would drain ALL pending asyncio tasks — including
+    # sleeping automation actions triggered by the new entity's state change — which
+    # causes multi-second (or multi-minute) delays in heavy HA configurations.
+    await asyncio.sleep(0)
 
     actual_entity_id: str = entity.entity_id
     if actual_entity_id != entity_id:
@@ -183,9 +187,8 @@ async def ws_set_entity_state(hass: HomeAssistant, connection: websocket_api.Act
         return
 
     entity.set_virtual_state(state, attributes)
-    # Wait for all HA listeners (e.g. automations) to process the state change before responding,
-    # consistent with ws_create_entity which also awaits async_block_till_done().
-    await hass.async_block_till_done()
+    # Yield once — same rationale as ws_create_entity: avoid draining unrelated tasks.
+    await asyncio.sleep(0)
     connection.send_result(msg["id"], {"entity_id": entity_id, "state": state})
 
 
