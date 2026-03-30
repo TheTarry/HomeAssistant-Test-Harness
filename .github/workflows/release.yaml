@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: 🔑 Authenticate as Release Manager
         id: release-manager-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.RELEASE_MANAGER_APP_ID }}
           private-key: ${{ secrets.RELEASE_MANAGER_PRIVATE_KEY }}
