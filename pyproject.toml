@@ -47,10 +47,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/TheTarry/HomeAssistant-Test-Harness"
-Repository = "https://github.com/TheTarry/HomeAssistant-Test-Harness"
-Issues = "https://github.com/TheTarry/HomeAssistant-Test-Harness/issues"
-Documentation = "https://github.com/TheTarry/HomeAssistant-Test-Harness#readme"
+Homepage = "https://github.com/HeadlessTarry/HomeAssistant-Test-Harness"
+Repository = "https://github.com/HeadlessTarry/HomeAssistant-Test-Harness"
+Issues = "https://github.com/HeadlessTarry/HomeAssistant-Test-Harness/issues"
+Documentation = "https://github.com/HeadlessTarry/HomeAssistant-Test-Harness#readme"
 
 # Register pytest plugin - this makes fixtures auto-discoverable
 [project.entry-points.pytest11]

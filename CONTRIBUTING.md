@@ -9,7 +9,7 @@ See the [Development Guide](documentation/development.md) for complete setup ins
 Quick start:
 
 ```bash
-git clone https://github.com/TheTarry/HomeAssistant-Test-Harness.git
+git clone https://github.com/HeadlessTarry/HomeAssistant-Test-Harness.git
 cd HomeAssistant-Test-Harness
 ./setup_dev_env.sh
 ```
@@ -104,7 +104,7 @@ This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating
 ## Questions
 
 - **Documentation**: Check the [documentation](documentation/) directory
-- **Issues**: Search [existing issues](https://github.com/TheTarry/HomeAssistant-Test-Harness/issues)
+- **Issues**: Search [existing issues](https://github.com/HeadlessTarry/HomeAssistant-Test-Harness/issues)
 - **New questions**: Open a new issue with the question label
 
 ## License
