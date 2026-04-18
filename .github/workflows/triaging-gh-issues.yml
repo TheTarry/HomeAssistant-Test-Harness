@@ -1,4 +1,7 @@
+---
 name: Triage GitHub Issues
+
+# yamllint disable-line rule:truthy
 on:
   schedule:
     - cron: '0 4 * * 1'
