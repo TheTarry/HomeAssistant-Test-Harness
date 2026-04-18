@@ -1,51 +1,22 @@
 ---
 version: 2
 updates:
-  # Enable version updates for Python dependencies
-  - package-ecosystem: "pip"
-    directory: "/"
+  - package-ecosystem: pip
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
+      interval: weekly
     cooldown:
-      default-days: 14
-    groups:
-      maintenance:
-        applies-to: version-updates
-        update-types: [minor, patch]
+      default-days: 20
+      semver-patch-days: 10
+      semver-minor-days: 20
+      semver-major-days: 30
 
-  # Enable version updates for pre-commit hooks
-  - package-ecosystem: "pre-commit"
-    directory: "/"
+  - package-ecosystem: pre-commit
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-    groups:
-      maintenance:
-        applies-to: version-updates
-        update-types: [minor, patch]
+      interval: weekly
 
-  # Enable version updates for GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-    cooldown:
-      default-days: 14
-    groups:
-      maintenance:
-        applies-to: version-updates
-        update-types: [minor, patch]
+      interval: weekly
