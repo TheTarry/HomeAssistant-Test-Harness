@@ -40,7 +40,7 @@ Tests (examples/) → Pytest plugin (conftest.py) → Client libraries → Docke
 
 ### Fixture dependency graph
 
-```
+```directory
 docker (session)
   └─ home_assistant (session)
        └─ time_machine (session)
