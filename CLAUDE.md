@@ -2,13 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What This Is
+## 🧩 What This Is
 
 A pytest plugin (`ha_integration_test_harness`) for integration testing Home Assistant and AppDaemon
 configurations using real Docker containers — no mocks. Tests run against a live HA instance managed
 by the harness.
 
-## Commands
+## ⚙️ Commands
 
 ```bash
 # Initial setup (installs deps via uv, sets up pre-commit, creates .env)
@@ -26,11 +26,11 @@ pytest examples/test_basic_usage.py::test_entity_state_with_auto_cleanup
 # Individual checks
 black src/ && isort src/   # format
 flake8 src/                 # lint
-mypy src/                   # type check
+mypy src/                   # type check (strict mode)
 python -m build             # build package
 ```
 
-## Architecture
+## 🏗️ Architecture
 
 The package is a thin pytest plugin layered over Docker and the Home Assistant REST/WebSocket API:
 
@@ -38,12 +38,24 @@ The package is a thin pytest plugin layered over Docker and the Home Assistant R
 Tests (examples/) → Pytest plugin (conftest.py) → Client libraries → Docker containers
 ```
 
-**Key components:**
+### Fixture dependency graph
 
-- **[conftest.py](src/ha_integration_test_harness/conftest.py)** — Registers four session-scoped
-  fixtures: `docker`, `home_assistant`, `app_daemon`, `time_machine`. Also registers a
-  function-scoped `_cleanup_test_entities` auto-use fixture that removes tracked entities after each
-  test.
+```
+docker (session)
+  └─ home_assistant (session)
+       └─ time_machine (session)
+  └─ _cleanup_test_entities (function, autouse) [conditionally uses home_assistant]
+```
+
+`docker` stages the HA config into a temp dir, injects the bundled `ha_test_harness` custom
+integration, then starts Docker Compose. `home_assistant` reads the long-lived token from the
+container after it starts.
+
+### Key components
+
+- **[conftest.py](src/ha_integration_test_harness/conftest.py)** — Four session-scoped fixtures
+  (`docker`, `home_assistant`, `app_daemon`, `time_machine`) and a function-scoped autouse fixture
+  `_cleanup_test_entities` that removes tracked entities after each test.
 
 - **[docker_manager.py](src/ha_integration_test_harness/docker_manager.py)** — Orchestrates Docker
   Compose. Auto-discovers HA config from `HOME_ASSISTANT_CONFIG_ROOT` env var or `home_assistant/`
@@ -63,8 +75,9 @@ Tests (examples/) → Pytest plugin (conftest.py) → Client libraries → Docke
   WebSocket API client. Key methods: `set_state()`, `get_state()`, `remove_entity()`,
   `call_action()`, `assert_entity_state()` (polls until match or timeout), `given_an_entity()`
   (creates registered entity via `ha_test_harness` WebSocket + tracks for auto-cleanup).
-  Routing: entities in `_created_entities` → WebSocket (`ha_test_harness`) for state/delete;
-  others → REST fallback. WebSocket also used for entity registry updates (areas, labels).
+  **Routing:** entities in `_created_entities` → WebSocket (`ha_test_harness`) for state/delete;
+  others → REST fallback. WebSocket opens a new connection per call, performs the auth handshake,
+  then sends/receives the command. WebSocket also used for entity registry updates (areas, labels).
 
 - **[time_machine.py](src/ha_integration_test_harness/time_machine.py)** — Manipulates time via
   libfaketime. **Time can only move forward, never backward.** Session-scoped — clock persists
@@ -80,19 +93,19 @@ Tests (examples/) → Pytest plugin (conftest.py) → Client libraries → Docke
   definitions and setup scripts. The shared volume at `/shared_data/` carries tokens and time state
   between containers. File-based health markers (`.homeassistant_ready`) signal startup completion.
 
-## Testing Strategy
+## 🧪 Testing Strategy
 
 There are **no unit tests** — the package is a thin wrapper around Docker/APIs. All testing is done
 via example tests in `examples/` against real containers. CI mirrors `./run_checks.sh`.
 
-## Code Style
+## 🎨 Code Style
 
 - Line length: 200 characters (Black + isort black profile)
-- Type hints required on all public APIs
+- Type hints required on all public APIs; mypy runs in **strict** mode
 - Docstrings: Google style (`Args:`, `Returns:`, `Raises:`)
 - Private methods/attributes use leading underscore
 
-## Writing Tests
+## ✍️ Writing Tests
 
 **Prefer `given_an_entity()` for test entities** — creates registered entities (have `unique_id`, appear
 in the HA UI) and tracks them for auto-cleanup. Supported domains: `sensor`, `binary_sensor`,
@@ -121,20 +134,20 @@ home_assistant.assert_entity_state("sensor.temp", expected_attributes={"min": la
 advance to explicit conditions in each test — the clock does not reset. Every test that depends on
 time must advance to its own desired starting point.
 
-## Adding a New Fixture
+## ➕ Adding a New Fixture
 
 1. Define in `conftest.py` with Google-style docstring
 2. Export from `__init__.py`
 3. Document in `documentation/fixtures.md`
 4. Add usage example in `documentation/usage.md`
 
-## Modifying Docker Configuration
+## 🐳 Modifying Docker Configuration
 
 1. Update [docker-compose.yaml](src/ha_integration_test_harness/containers/docker-compose.yaml)
 2. Test manually: `export REPO_ROOT=/path/to/ha/config && docker compose up`
 3. Update related setup scripts (`homeassistant/entrypoint.sh`, etc.)
 
-## Documentation
+## 📚 Documentation
 
 Each topic lives in its own file under `documentation/`. New files must be linked from `README.md`.
 Keep each file focused on one topic — split rather than grow a single file. Cross-link from related
@@ -143,7 +156,7 @@ files where useful.
 Style: relative links between docs, fenced code blocks with explicit language tags, ≤200 char lines,
 one blank line between each top-level heading and its content.
 
-## Important Constraints
+## ⚠️ Important Constraints
 
 - **Package name**: Always `ha_integration_test_harness` (underscores, not hyphens)
 - **Runtime dependencies**: Only `requests`, `python-dateutil`, `PyYAML`, `websocket-client` —
