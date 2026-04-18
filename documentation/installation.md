@@ -18,7 +18,7 @@ Add to your `pyproject.toml`:
 ```toml
 [project.optional-dependencies]
 dev = [
-    "ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git",
+    "ha-integration-test-harness @ git+https://github.com/HeadlessTarry/HomeAssistant-Test-Harness.git",
     # Add other dev dependencies here (e.g., pytest, black, mypy)
 ]
 ```
@@ -34,7 +34,7 @@ pip install -e ".[dev]"
 Create a `requirements-dev.txt` file:
 
 ```text
-ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git
+ha-integration-test-harness @ git+https://github.com/HeadlessTarry/HomeAssistant-Test-Harness.git
 ```
 
 Then install with:
@@ -48,7 +48,7 @@ pip install -r requirements-dev.txt
 If you use Poetry:
 
 ```bash
-poetry add --group dev git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git
+poetry add --group dev git+https://github.com/HeadlessTarry/HomeAssistant-Test-Harness.git
 ```
 
 ### Method 4: Direct Install (Not Recommended)
@@ -56,7 +56,7 @@ poetry add --group dev git+https://github.com/TheTarry/HomeAssistant-Test-Harnes
 For quick testing only (doesn't add to your project's dependency list):
 
 ```bash
-pip install git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git
+pip install git+https://github.com/HeadlessTarry/HomeAssistant-Test-Harness.git
 ```
 
 ## Verification

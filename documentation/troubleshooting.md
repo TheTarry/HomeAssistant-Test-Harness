@@ -10,7 +10,7 @@
 DockerError: configuration.yaml not found at /path/to/home_assistant/configuration.yaml.
 Tests must be run from a directory containing a 'home_assistant' subdirectory with your Home Assistant configuration,
 or set HOME_ASSISTANT_CONFIG_ROOT environment variable to specify the location.
-See: https://github.com/TheTarry/HomeAssistant-Test-Harness/blob/main/documentation/usage.md
+See: https://github.com/HeadlessTarry/HomeAssistant-Test-Harness/blob/main/documentation/usage.md
 ```
 
 **Cause:** Tests cannot find your Home Assistant `configuration.yaml` file.
@@ -91,7 +91,7 @@ The harness uses ephemeral ports by default, so this should be rare. If you enco
    # In your pyproject.toml
    [project.optional-dependencies]
    dev = [
-       "ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git@v0.1.1"
+       "ha-integration-test-harness @ git+https://github.com/HeadlessTarry/HomeAssistant-Test-Harness.git@v0.1.1"
    ]
    ```
 
@@ -129,7 +129,7 @@ fixture 'home_assistant' not found
    # pyproject.toml
    [project.optional-dependencies]
    dev = [
-       "ha-integration-test-harness @ git+https://github.com/TheTarry/HomeAssistant-Test-Harness.git",
+       "ha-integration-test-harness @ git+https://github.com/HeadlessTarry/HomeAssistant-Test-Harness.git",
    ]
    ```
 
@@ -285,7 +285,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 If you encounter issues not covered here:
 
-1. Check [GitHub Issues](https://github.com/TheTarry/HomeAssistant-Test-Harness/issues)
+1. Check [GitHub Issues](https://github.com/HeadlessTarry/HomeAssistant-Test-Harness/issues)
 2. Open a new issue with:
   - Full error message
   - Test code that reproduces the issue

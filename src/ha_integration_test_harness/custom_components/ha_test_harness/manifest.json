@@ -2,7 +2,7 @@
     "domain": "ha_test_harness",
     "name": "HA Test Harness",
     "version": "1.0.0",
-    "documentation": "https://github.com/TheTarry/HomeAssistant-Test-Harness",
+    "documentation": "https://github.com/HeadlessTarry/HomeAssistant-Test-Harness",
     "dependencies": [],
     "codeowners": [],
     "requirements": [],

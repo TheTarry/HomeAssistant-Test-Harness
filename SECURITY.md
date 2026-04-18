@@ -18,7 +18,7 @@ We take the security of Home Assistant Test Harness seriously. If you discover a
 
 Instead, please use GitHub's private vulnerability reporting feature:
 
-1. Navigate to the [Security tab](https://github.com/TheTarry/HomeAssistant-Test-Harness/security) of this repository
+1. Navigate to the [Security tab](https://github.com/HeadlessTarry/HomeAssistant-Test-Harness/security) of this repository
 2. Click **"Report a vulnerability"**
 3. Fill out the vulnerability report form with the details below
 
