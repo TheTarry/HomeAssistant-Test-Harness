@@ -1,3 +1,4 @@
+---
 # Persistent Home Assistant Entities
 # These entities are registered during test session startup and
 # remain available throughout all tests.

@@ -44,7 +44,7 @@ Tests (examples/) → Pytest plugin (conftest.py) → Client libraries → Docke
 docker (session)
   └─ home_assistant (session)
        └─ time_machine (session)
-  └─ _cleanup_test_entities (function, autouse) [conditionally uses home_assistant]
+  └─ _cleanup_test_entities (function, autouse) [conditionally restores config + deletes entities]
 ```
 
 `docker` stages the HA config into a temp dir, injects the bundled `ha_test_harness` custom
@@ -55,34 +55,38 @@ container after it starts.
 
 - **[conftest.py](src/ha_integration_test_harness/conftest.py)** — Four session-scoped fixtures
   (`docker`, `home_assistant`, `app_daemon`, `time_machine`) and a function-scoped autouse fixture
-  `_cleanup_test_entities` that removes tracked entities after each test.
+  `_cleanup_test_entities` that calls `restore_entity_config()` then `clean_up_test_entities()` after
+  each test (only if the test used the `home_assistant` fixture).
 
 - **[docker_manager.py](src/ha_integration_test_harness/docker_manager.py)** — Orchestrates Docker
   Compose. Auto-discovers HA config from `HOME_ASSISTANT_CONFIG_ROOT` env var or `home_assistant/`
-  subdirectory. Validates `configuration.yaml` exists. **Always** stages config: injects the bundled
-  `ha_test_harness` custom integration into `custom_components/`, appends `ha_test_harness:` to
-  `configuration.yaml`, and optionally applies the persistent entities YAML overlay. Handles ephemeral
-  ports for parallel test support.
+  subdirectory, and AppDaemon config from `APPDAEMON_CONFIG_ROOT` or `appdaemon/`. **Always** stages
+  config: injects the bundled `ha_test_harness` custom integration into `custom_components/`, appends
+  `ha_test_harness:` to `configuration.yaml`, and optionally applies the persistent entities YAML
+  overlay. Handles ephemeral ports for parallel test support.
 
 - **[custom_components/ha_test_harness/](src/ha_integration_test_harness/custom_components/ha_test_harness/)** —
   Bundled HA custom integration. Injected into every staged config at container startup. Exposes
   three WebSocket commands: `ha_test_harness/entity/create`, `ha_test_harness/entity/set_state`,
   `ha_test_harness/entity/delete`. Entities created via this integration are fully registered in the
   HA entity registry (have a `unique_id`, appear in the UI). Supported domains: `sensor`,
-  `binary_sensor`, `switch`, `light`.
+  `binary_sensor`, `switch`, `light` (defined in `SUPPORTED_DOMAINS` in `__init__.py`).
 
 - **[homeassistant_client.py](src/ha_integration_test_harness/homeassistant_client.py)** — REST +
   WebSocket API client. Key methods: `set_state()`, `get_state()`, `remove_entity()`,
   `call_action()`, `assert_entity_state()` (polls until match or timeout), `given_an_entity()`
-  (creates registered entity via `ha_test_harness` WebSocket + tracks for auto-cleanup).
-  **Routing:** entities in `_created_entities` → WebSocket (`ha_test_harness`) for state/delete;
-  others → REST fallback. WebSocket opens a new connection per call, performs the auth handshake,
-  then sends/receives the command. WebSocket also used for entity registry updates (areas, labels).
+  (creates registered entity via `ha_test_harness` WebSocket + tracks for auto-cleanup),
+  `given_entity_has()` (assigns area/labels via entity registry WebSocket + snapshots original
+  config for rollback). **Routing:** entities in `_created_entities` → WebSocket (`ha_test_harness`)
+  for state/delete; others → REST fallback. WebSocket opens a new connection per call, performs the
+  auth handshake, then sends/receives the command.
 
 - **[time_machine.py](src/ha_integration_test_harness/time_machine.py)** — Manipulates time via
   libfaketime. **Time can only move forward, never backward.** Session-scoped — clock persists
   across all tests. Methods: `fast_forward(delta)`, `jump_to_next(...)`,
-  `advance_to_preset("sunrise"|"sunset")`.
+  `advance_to_preset("sunrise"|"sunset")`. When constructed with a `timezone` (sourced from HA
+  config), `hour`/`minute`/`second` in `jump_to_next` are interpreted as local wall-clock time with
+  full DST handling.
 
 - **[exceptions.py](src/ha_integration_test_harness/exceptions.py)** — Custom hierarchy:
   `IntegrationTestError` → `DockerError`, `HomeAssistantClientError`, `AppDaemonClientError`,
