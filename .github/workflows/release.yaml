@@ -40,8 +40,9 @@ jobs:
           enable-cache: true
 
       - name: 🔍 Check if release already exists
+        env:
+          VERSION: ${{ inputs.version }}
         run: |-
-          VERSION="${{ inputs.version }}"
           TAG="v$VERSION"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -52,8 +53,9 @@ jobs:
           echo "Release $TAG does not exist, proceeding with creation"
 
       - name: 📝 Update version in all files
+        env:
+          VERSION: ${{ inputs.version }}
         run: |-
-          VERSION="${{ inputs.version }}"
           echo "Updating version to $VERSION in pyproject.toml and uv.lock"
 
           # Update pyproject.toml
@@ -77,12 +79,13 @@ jobs:
       - name: 📦 Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ steps.release-manager-token.outputs.token }}
+          PUBLISH: ${{ inputs.publish }}
+          VERSION: ${{ inputs.version }}
         run: |-
-          VERSION="${{ inputs.version }}"
           TAG="v$VERSION"
           DRAFT_FLAG=""
 
-          if [ "${{ inputs.publish }}" = "false" ]; then
+          if [ "$PUBLISH" = "false" ]; then
             DRAFT_FLAG="--draft"
             echo "Creating draft release with tag: $TAG"
           else
