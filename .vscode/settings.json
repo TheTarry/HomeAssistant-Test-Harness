@@ -10,5 +10,9 @@
   "github-actions.workflows.pinned.workflows": [
     ".github/workflows/ci.yaml"
   ],
-  "terminal.integrated.defaultProfile.windows": "Git Bash"
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "sonarlint.connectedMode.project": {
+    "connectionId": "headlesstarry",
+    "projectKey": "HeadlessTarry_HomeAssistant-Test-Harness"
+  }
 }
