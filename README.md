@@ -3,6 +3,7 @@
 A pytest plugin for integration testing Home Assistant and AppDaemon configurations using Docker containers.
 
 [![Continuous Integration](https://github.com/HeadlessTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml/badge.svg)](https://github.com/HeadlessTarry/HomeAssistant-Test-Harness/actions/workflows/ci.yaml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=HeadlessTarry_HomeAssistant-Test-Harness&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=HeadlessTarry_HomeAssistant-Test-Harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
